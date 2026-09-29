@@ -17,6 +17,7 @@ import cl.duoc.pedidos360.pedidos.exception.RecursoNoEncontradoException;
 import cl.duoc.pedidos360.pedidos.model.EstadoPago;
 import cl.duoc.pedidos360.pedidos.model.EstadoPedido;
 import cl.duoc.pedidos360.pedidos.model.ItemPedido;
+import cl.duoc.pedidos360.pedidos.model.MetodoPago;
 import cl.duoc.pedidos360.pedidos.model.Pedido;
 import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
 
@@ -61,7 +62,16 @@ public class PedidoService {
     @Transactional
     public PedidoResponse cambiarEstado(Long id, EstadoPedido estado) {
         Pedido pedido = buscar(id);
+        // Repetir el estado actual no cambia nada; saltarse pasos o retroceder no se permite.
+        if (pedido.getEstado() != estado && !pedido.getEstado().puedePasarA(estado)) {
+            throw new OperacionNoPermitidaException(
+                    "Un pedido " + pedido.getEstado() + " no puede pasar a " + estado);
+        }
         pedido.cambiarEstado(estado);
+        // En efectivo, el repartidor cobra al entregar: el pago queda confirmado junto con la entrega.
+        if (estado == EstadoPedido.ENTREGADO && pedido.getMetodoPago() == MetodoPago.EFECTIVO) {
+            pedido.cambiarEstadoPago(EstadoPago.PAGADO);
+        }
         return PedidoResponse.from(pedido);
     }
 
@@ -77,6 +87,10 @@ public class PedidoService {
         Pedido pedido = buscarAutorizado(id, usuario);
         if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
             throw new OperacionNoPermitidaException("Solo se pueden cancelar pedidos PENDIENTE");
+        }
+        // Un pedido cobrado requiere devolver el dinero, así que solo la tienda puede anularlo.
+        if (pedido.getEstadoPago() == EstadoPago.PAGADO) {
+            throw new OperacionNoPermitidaException("El pedido ya fue pagado; para anularlo contacta a la tienda");
         }
         pedido.cambiarEstado(EstadoPedido.CANCELADO);
         return PedidoResponse.from(pedido);

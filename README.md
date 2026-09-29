@@ -79,11 +79,13 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 | GET | `/api/pedidos` | ms-pedidos | pedidos.read | ADMIN: todos; CLIENTE: propios |
 | GET | `/api/pedidos/{id}` | ms-pedidos | pedidos.read | dueño o ADMIN |
 | POST | `/api/pedidos` | ms-pedidos | pedidos.write | CLIENTE o ADMIN |
-| PATCH | `/api/pedidos/{id}/estado` | ms-pedidos | pedidos.write | ADMIN |
+| PATCH | `/api/pedidos/{id}/estado` | ms-pedidos | pedidos.write | ADMIN (solo avanza en orden, ver abajo) |
 | POST | `/api/pedidos/{id}/cancelar` | ms-pedidos | pedidos.write | dueño (si está PENDIENTE) |
 | PATCH | `/api/pedidos/{id}/pago` | ms-pedidos | pedidos.write | ADMIN (confirma transferencia o efectivo) |
 | POST | `/api/pedidos/{id}/pago/webpay` | ms-pedidos | pedidos.write | dueño (inicia el pago con tarjeta) |
 | GET, POST | `/api/pagos/webpay/retorno` | ms-pedidos | pública | retorno del navegador desde Webpay |
+
+**Estados del pedido:** `PENDIENTE` (Recibido) → `CONFIRMADO` (En preparación) → `DESPACHADO` (En camino) → `ENTREGADO`. Solo se avanza al siguiente estado; se puede pasar a `CANCELADO` desde Recibido o En preparación. El cliente puede cancelar mientras el pedido está Recibido y sin pagar. Un pedido en efectivo queda pagado al marcarse como entregado. Cualquier otro cambio responde 409.
 
 Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol o scope, 404, 409, 422 y 502.
 
@@ -104,7 +106,7 @@ Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol
 | `/catalogo` | autenticado | Catálogo con búsqueda, categorías y ofertas |
 | `/producto/:id` | autenticado | Detalle del producto |
 | `/carrito` | CLIENTE o ADMIN | Carrito, dirección con mapa, celular y método de pago |
-| `/pedidos` | autenticado | Seguimiento del pedido en curso, estado del pago e historial |
+| `/pedidos` | autenticado | Seguimiento del pedido (se actualiza solo cada 15 s, con una imagen por estado), estado del pago e historial |
 | `/perfil` | autenticado | Claims de los tokens y pruebas contra la API (token válido, sin token, token alterado) |
 | `/admin` | ADMIN | Gestión de pedidos y pagos (indicadores desde el BFF) |
 | `/admin/productos` | ADMIN | Mantenedor del catálogo |
@@ -158,8 +160,8 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 | Qué | Cómo | Cantidad |
 |---|---|---|
-| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422 y pagos con Webpay simulado) | 47 |
-| Frontend | `npm test` en `frontend/` (Vitest) | 22 |
+| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado y transiciones de estado) | 52 |
+| Frontend | `npm test` en `frontend/` (Vitest) | 26 |
 | End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN | 25 verificaciones |
 
 ## Variables de entorno
@@ -208,7 +210,7 @@ Las credenciales del lab expiran cada ~4 horas; al reiniciar el lab hay que volv
 
 ## Flujo de trabajo
 
-- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.2.7`).
+- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.3.0`).
 - `dev`: integración.
 - `feature/*`, `fix/*`, `chore/*`, `docs/*`: una rama por cambio, que sale de `dev` y vuelve por Pull Request.
 

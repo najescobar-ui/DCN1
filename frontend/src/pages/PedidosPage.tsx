@@ -7,12 +7,17 @@ import { useCart } from '../cart/useCart'
 import { BackIcon } from '../components/icons'
 import { DatosTransferencia } from '../components/PaymentInfo'
 import { formatearTelefono } from '../utils/telefono'
+import { TEXTO_SEGUIMIENTO, encuadre, imagenSeguimiento, unidades } from '../utils/seguimiento'
 import { irAWebpay } from '../utils/webpay'
 import { clp, fecha } from '../utils/format'
 import { notify } from '../utils/notify'
 
 const FLUJO: EstadoPedido[] = ['PENDIENTE', 'CONFIRMADO', 'DESPACHADO', 'ENTREGADO']
 const EN_CURSO: EstadoPedido[] = ['PENDIENTE', 'CONFIRMADO', 'DESPACHADO']
+/** Cada cuánto se consulta el estado mientras hay un pedido en curso. */
+const ACTUALIZAR_CADA_MS = 15000
+/** Durante cuánto tiempo se sigue destacando un pedido después de entregado. */
+const RECIEN_ENTREGADO_MS = 3 * 60 * 60 * 1000
 const RESULTADO_PAGO: Record<string, [ok: boolean, texto: string]> = {
   aprobado: [true, 'Pago aprobado por Webpay. ¡Gracias!'],
   rechazado: [false, 'Webpay rechazó el pago. Puedes intentarlo de nuevo.'],
@@ -52,8 +57,17 @@ export function PedidosPage() {
     }
   }, [params, setParams])
 
+  // Momento de la última carga: sirve para saber si el último pedido se entregó hace poco.
+  const [cargadoEn, setCargadoEn] = useState(0)
+
   const cargar = useCallback(() => {
-    api.pedidos().then(setPedidos, () => setPedidos([]))
+    api.pedidos().then(
+      (data) => {
+        setPedidos(data)
+        setCargadoEn(Date.now())
+      },
+      () => setPedidos([]),
+    )
   }, [])
 
   useEffect(() => {
@@ -61,7 +75,26 @@ export function PedidosPage() {
     api.productos().then(setProductos, () => undefined)
   }, [cargar])
 
-  const activo = useMemo(() => pedidos?.find((p) => EN_CURSO.includes(p.estado)), [pedidos])
+  // Se destaca el último pedido mientras está en curso o recién entregado (para mostrar "¡Que lo
+  // disfrutes!"); si no, otro pedido que siga en curso. Los pedidos vienen del más nuevo al más antiguo.
+  const activo = useMemo(() => {
+    const ultimo = pedidos?.[0]
+    const recienEntregado =
+      ultimo?.estado === 'ENTREGADO' && cargadoEn - new Date(ultimo.actualizadoEn).getTime() < RECIEN_ENTREGADO_MS
+    if (ultimo && (EN_CURSO.includes(ultimo.estado) || recienEntregado)) return ultimo
+    return pedidos?.find((p) => EN_CURSO.includes(p.estado))
+  }, [pedidos, cargadoEn])
+  const enCurso = !!pedidos?.some((p) => EN_CURSO.includes(p.estado))
+
+  // Mientras hay un pedido en curso, se consulta su estado periódicamente (solo con la pestaña visible),
+  // así el cliente ve los cambios que hace el admin sin recargar.
+  useEffect(() => {
+    if (!enCurso) return
+    const timer = setInterval(() => {
+      if (!document.hidden) cargar()
+    }, ACTUALIZAR_CADA_MS)
+    return () => clearInterval(timer)
+  }, [enCurso, cargar])
   const historial = useMemo(() => (pedidos ?? []).filter((p) => p !== activo), [pedidos, activo])
 
   const cancelar = async (pedido: Pedido) => {
@@ -134,7 +167,7 @@ export function PedidosPage() {
                 </span>
                 <h2 className="d">{ESTADO_LABEL[activo.estado]}</h2>
                 <span className="muted" style={{ fontSize: 15 }}>
-                  {activo.items.reduce((n, i) => n + i.cantidad, 0)} productos · {clp(activo.total)}
+                  {unidades(activo.items.reduce((n, i) => n + i.cantidad, 0))} · {clp(activo.total)}
                 </span>
                 {activo.direccionEntrega && (
                   <span className="muted" style={{ fontSize: 14 }}>
@@ -153,7 +186,7 @@ export function PedidosPage() {
                 <span className="d accent" style={{ fontSize: 40 }}>
                   {hora(activo.actualizadoEn)}
                 </span>
-                {activo.estado === 'PENDIENTE' && !session.isAdmin && (
+                {activo.estado === 'PENDIENTE' && activo.estadoPago !== 'PAGADO' && !session.isAdmin && (
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => cancelar(activo)}>
                     Cancelar pedido
                   </button>
@@ -164,7 +197,8 @@ export function PedidosPage() {
               {FLUJO.map((estado, i) => {
                 const actual = FLUJO.indexOf(activo.estado)
                 const clase = i === actual ? 'done now' : i < actual ? 'done' : ''
-                const tiempo = i === 0 ? hora(activo.creadoEn) : i === actual ? hora(activo.actualizadoEn) : '—'
+                // Solo se guardan la creación y el último cambio: los pasos intermedios ya cumplidos llevan ✓.
+                const tiempo = i === 0 ? hora(activo.creadoEn) : i === actual ? hora(activo.actualizadoEn) : '✓'
                 return (
                   <li key={estado} className={clase}>
                     <div className="bar" />
@@ -199,8 +233,12 @@ export function PedidosPage() {
             )}
           </div>
           <div className="tracker-art">
-            <img src="/img/pudu/pudu-sushi.jpg" alt="El pudú de Pedidos360 esperando su pedido" />
-            <span>{activo.estado === 'DESPACHADO' ? 'Ya casi llega...' : 'Preparando tu pedido...'}</span>
+            <img
+              src={imagenSeguimiento(activo, productos)}
+              style={{ objectPosition: encuadre(imagenSeguimiento(activo, productos)) }}
+              alt={`El pudú de Pedidos360: ${TEXTO_SEGUIMIENTO[activo.estado]}`}
+            />
+            <span>{TEXTO_SEGUIMIENTO[activo.estado]}</span>
           </div>
         </section>
       ) : (
@@ -217,7 +255,7 @@ export function PedidosPage() {
             </Link>
           </div>
           <div className="tracker-art">
-            <img src="/img/pudu/pudu-sushi.jpg" alt="El pudú de Pedidos360 esperando su sushi" />
+            <img src="/img/pudu/pudu-home.jpg" alt="El pudú de Pedidos360 en la cocina" />
           </div>
         </section>
       )}
