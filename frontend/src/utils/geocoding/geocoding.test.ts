@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { combinarDireccion, numeroEscrito, ordenar, sinNumero, type Lugar } from './geocoding'
+import { combinarDireccion, numeroEscrito, ordenar, sinNumero, type Lugar } from '.'
 
 const providencia: Lugar = {
   etiqueta: 'Avenida Providencia 1208, Providencia, Región Metropolitana',
@@ -54,5 +54,21 @@ describe('geocoding', () => {
     expect(orden[0]).toBe(calleNunoa)
     expect(orden.indexOf(laFlorida)).toBeGreaterThan(orden.indexOf(ferreteria))
     expect(combinarDireccion('San Jorge 60, Ñuñoa', orden[0])).toEqual({ direccion: 'San Jorge 60, Ñuñoa', exacta: false })
+  })
+})
+
+describe('mapbox', () => {
+  it('maps a Mapbox v6 address to a Lugar', async () => {
+    const { toLugar } = await import('./mapbox')
+    const lugar = toLugar({
+      geometry: { coordinates: [-70.578097, -33.454468] },
+      properties: {
+        feature_type: 'address',
+        name: 'San Jorge 60',
+        context: { address: { address_number: '60', street_name: 'San Jorge' }, place: { name: 'Ñuñoa' } },
+      },
+    })
+    expect(lugar).toMatchObject({ etiqueta: 'San Jorge 60, Ñuñoa', numero: '60', comuna: 'Ñuñoa', calle: 'San Jorge', tipo: 'house' })
+    expect(combinarDireccion('San Jorge 60, Ñuñoa', lugar)).toEqual({ direccion: 'San Jorge 60, Ñuñoa', exacta: true })
   })
 })

@@ -59,7 +59,8 @@ Respuestas de error en `application/problem+json`: 400 validación, 401 token au
   Tarjeta de prueba: `4051 8856 0044 6623`, CVV `123`, cualquier vencimiento futuro; en el banco simulado, RUT `11.111.111-1` y clave `123`.
 - **Transferencia:** se muestran datos bancarios (ficticios) y un botón de WhatsApp con el mensaje del comprobante; un ADMIN confirma el pago.
 - **Efectivo:** pago al recibir; un ADMIN lo confirma al entregar.
-- **Dirección:** autocompletado con [Photon](https://photon.komoot.io) (OpenStreetMap, sin API key) y mapa Leaflet con tiles de OpenStreetMap; se guardan dirección y coordenadas.
+- **Dirección:** autocompletado con **Mapbox Geocoding v6** (buena numeración en Chile) y mapa Leaflet con el estilo oscuro de Mapbox. Si no hay token o Mapbox falla, se usa [Photon](https://photon.komoot.io) (OpenStreetMap, sin API key) con tiles de OpenStreetMap. Lo que escribe el usuario se conserva si el mapa no conoce el número exacto. Se guardan dirección y coordenadas.
+  El token público de Mapbox (`pk.…`) **no se versiona**: va en `frontend/.env.production.local` y `frontend/.env.development.local` como `VITE_MAPBOX_TOKEN=pk.…` (ignorados por git). Conviene restringirlo por URL en la cuenta de Mapbox.
 - **Celular:** obligatorio en el registro de Cognito (`phone_number`) y en cada pedido.
 
 ## Pantallas
