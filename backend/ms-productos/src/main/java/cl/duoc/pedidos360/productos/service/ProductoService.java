@@ -31,14 +31,16 @@ public class ProductoService {
 
     @Transactional
     public ProductoResponse crear(ProductoRequest request) {
-        Producto producto = new Producto(request.nombre(), request.descripcion(), request.precio(), request.stock());
+        Producto producto = new Producto(request.nombre(), request.descripcion(), request.categoria(),
+                request.precio(), request.precioAnterior(), request.stock(), request.imagenUrl());
         return ProductoResponse.from(repository.save(producto));
     }
 
     @Transactional
     public ProductoResponse actualizar(Long id, ProductoRequest request) {
         Producto producto = buscar(id);
-        producto.actualizar(request.nombre(), request.descripcion(), request.precio(), request.stock());
+        producto.actualizar(request.nombre(), request.descripcion(), request.categoria(), request.precio(),
+                request.precioAnterior(), request.stock(), request.imagenUrl());
         return ProductoResponse.from(producto);
     }
 
