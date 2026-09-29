@@ -127,9 +127,10 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `01-network-rds.sh` | Security groups y RDS PostgreSQL (privado, solo accesible desde la EC2) |
 | `02-amplify-cognito.sh` | App de Amplify; user pool, grupos ADMIN/CLIENTE, resource server `pedidos360` con 4 scopes, app client público (Auth Code + PKCE), dominio del Hosted UI y usuarios de prueba |
 | `03-ec2.sh` | EC2 t3.small (Amazon Linux 2023 + Corretto 21) con Elastic IP |
-| `04-apigw.sh` | HTTP API con CORS, authorizer JWT de Cognito y una ruta por endpoint con su scope |
+| `04-apigw.sh` | HTTP API con CORS (solo el sitio principal; `CORS_DEV=1` agrega preview y localhost), authorizer JWT de Cognito y una ruta por endpoint con su scope |
 | `05-deploy-backend.sh` | BD `pedidos`, variables de entorno en la EC2 y despliegue de los 3 servicios con systemd |
 | `06-deploy-frontend.sh` | Build de producción de React y publicación en Amplify (`BRANCH=preview` publica un ambiente de revisión) |
+| `09-cognito-registro.sh` | Lambda *post confirmation* que agrega a cada usuario registrado al grupo CLIENTE |
 | `08-cognito-ui.sh` | Aplica logo y colores de Pedidos360 al Hosted UI de Cognito (`infra/cognito-ui/`) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
 | `smoke-test.sh` | Evidencia end-to-end: cada ruta sin token, con token alterado, como CLIENTE y como ADMIN |
