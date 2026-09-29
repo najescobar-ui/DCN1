@@ -19,6 +19,8 @@ export function useSession() {
     roles,
     scopes: scopesFrom(claims),
     isAdmin: roles.includes('ADMIN'),
+    /** Nombre del rol para mostrar en la interfaz. */
+    rolVisible: roles.includes('ADMIN') ? 'Administrador' : 'Cliente',
     username: claims?.username ?? '',
     login: (returnTo?: string) => auth.signinRedirect(signinArgs(returnTo)),
     register: () => signupManager.signinRedirect(signinArgs()),

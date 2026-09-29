@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api } from '../api/api'
-import { codigoPedido, type MetodoPago } from '../api/models'
+import { codigoPedido, type MetodoPago, type Pedido } from '../api/models'
 import { useSession } from '../auth/useSession'
 import { useCart } from '../cart/useCart'
 import { AddressPicker } from '../components/AddressPicker'
@@ -26,6 +26,15 @@ export function CarritoPage() {
   const [metodo, setMetodo] = useState<MetodoPago>('TARJETA')
   const [enviando, setEnviando] = useState(false)
   const [intento, setIntento] = useState(false)
+  // Solo se permite un pedido en curso: si hay uno, el carrito lo avisa y no deja confirmar.
+  const [enCurso, setEnCurso] = useState<Pedido | null>(null)
+
+  useEffect(() => {
+    api.pedidos().then(
+      (lista) => setEnCurso(lista.find((p) => ['PENDIENTE', 'CONFIRMADO', 'DESPACHADO'].includes(p.estado)) ?? null),
+      () => undefined,
+    )
+  }, [])
 
   // Prefill the phone registered in Cognito (ID token claim) the first time.
   const telefonoCuenta = session.idClaims?.phone_number as string | undefined
@@ -225,7 +234,13 @@ export function CarritoPage() {
               <span>Total</span>
               <span>{clp(cart.subtotal)}</span>
             </div>
-            <button type="button" className="btn btn-lg" onClick={confirmar} disabled={enviando}>
+            {enCurso && (
+              <div className="address-note">
+                Ya tienes un pedido en curso ({codigoPedido(enCurso.id)}). Podrás hacer otro cuando se entregue.{' '}
+                <Link to="/pedidos">Ver mi pedido</Link>
+              </div>
+            )}
+            <button type="button" className="btn btn-lg" onClick={confirmar} disabled={enviando || !!enCurso}>
               {enviando ? 'Procesando...' : metodo === 'TARJETA' ? 'Confirmar y pagar' : 'Confirmar pedido'}
             </button>
             {intento && !valido && <span className="error-text" style={{ fontSize: 13 }}>Revisa la dirección y el celular.</span>}
