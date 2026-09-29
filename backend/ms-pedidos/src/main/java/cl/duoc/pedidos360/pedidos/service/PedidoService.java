@@ -14,6 +14,7 @@ import cl.duoc.pedidos360.pedidos.dto.PedidoResponse;
 import cl.duoc.pedidos360.pedidos.exception.OperacionNoPermitidaException;
 import cl.duoc.pedidos360.pedidos.exception.ProductoNoDisponibleException;
 import cl.duoc.pedidos360.pedidos.exception.RecursoNoEncontradoException;
+import cl.duoc.pedidos360.pedidos.model.EstadoPago;
 import cl.duoc.pedidos360.pedidos.model.EstadoPedido;
 import cl.duoc.pedidos360.pedidos.model.ItemPedido;
 import cl.duoc.pedidos360.pedidos.model.Pedido;
@@ -45,7 +46,8 @@ public class PedidoService {
     /** Prices come from ms-productos, never from the client request. */
     @Transactional
     public PedidoResponse crear(CrearPedidoRequest request, Usuario usuario) {
-        Pedido pedido = new Pedido(usuario.id(), usuario.username(), request.direccionEntrega());
+        Pedido pedido = new Pedido(usuario.id(), usuario.username(), request.direccionEntrega().trim(),
+                request.telefonoNormalizado(), request.latitud(), request.longitud(), request.metodoPago());
         for (ItemRequest item : request.items()) {
             ProductoDto producto = productosClient.obtener(item.productoId());
             if (producto.stock() != null && producto.stock() < item.cantidad()) {
@@ -64,6 +66,13 @@ public class PedidoService {
     }
 
     @Transactional
+    public PedidoResponse cambiarEstadoPago(Long id, EstadoPago estadoPago) {
+        Pedido pedido = buscar(id);
+        pedido.cambiarEstadoPago(estadoPago);
+        return PedidoResponse.from(pedido);
+    }
+
+    @Transactional
     public PedidoResponse cancelar(Long id, Usuario usuario) {
         Pedido pedido = buscarAutorizado(id, usuario);
         if (pedido.getEstado() != EstadoPedido.PENDIENTE) {
@@ -73,7 +82,8 @@ public class PedidoService {
         return PedidoResponse.from(pedido);
     }
 
-    private Pedido buscarAutorizado(Long id, Usuario usuario) {
+    /** The order if the caller owns it or is ADMIN; 403 otherwise. */
+    public Pedido buscarAutorizado(Long id, Usuario usuario) {
         Pedido pedido = buscar(id);
         if (!usuario.esAdmin() && !pedido.perteneceA(usuario.id())) {
             throw new AccessDeniedException("El pedido pertenece a otro cliente");

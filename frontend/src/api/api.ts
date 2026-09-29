@@ -1,5 +1,5 @@
 import { http } from './http'
-import type { CrearPedidoRequest, EstadoPedido, Pedido, Producto, ProductoRequest, Resumen, Usuario } from './models'
+import type { CrearPedidoRequest, EstadoPago, EstadoPedido, Pedido, Producto, ProductoRequest, Resumen, Usuario } from './models'
 
 /** All calls go to API Gateway; the request interceptor adds the access token. */
 export const api = {
@@ -17,4 +17,10 @@ export const api = {
   cambiarEstado: (id: number, estado: EstadoPedido) =>
     http.patch<Pedido>(`/pedidos/${id}/estado`, { estado }).then((r) => r.data),
   cancelarPedido: (id: number) => http.post<Pedido>(`/pedidos/${id}/cancelar`).then((r) => r.data),
+  cambiarEstadoPago: (id: number, estadoPago: EstadoPago) =>
+    http.patch<Pedido>(`/pedidos/${id}/pago`, { estadoPago }).then((r) => r.data),
+  iniciarWebpay: (id: number) =>
+    http
+      .post<{ token: string; url: string }>(`/pedidos/${id}/pago/webpay`, { origen: window.location.origin })
+      .then((r) => r.data),
 }

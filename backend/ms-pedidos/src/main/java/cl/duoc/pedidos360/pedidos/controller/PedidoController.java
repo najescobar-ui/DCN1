@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import cl.duoc.pedidos360.pedidos.dto.CambiarEstadoPagoRequest;
 import cl.duoc.pedidos360.pedidos.dto.CambiarEstadoRequest;
 import cl.duoc.pedidos360.pedidos.dto.CrearPedidoRequest;
 import cl.duoc.pedidos360.pedidos.dto.PedidoResponse;
@@ -54,6 +55,13 @@ public class PedidoController {
     @PreAuthorize("hasRole('ADMIN')")
     public PedidoResponse cambiarEstado(@PathVariable Long id, @Valid @RequestBody CambiarEstadoRequest request) {
         return service.cambiarEstado(id, request.estado());
+    }
+
+    /** For transfers and cash: an admin confirms the payment manually. */
+    @PatchMapping("/{id}/pago")
+    @PreAuthorize("hasRole('ADMIN')")
+    public PedidoResponse cambiarEstadoPago(@PathVariable Long id, @Valid @RequestBody CambiarEstadoPagoRequest request) {
+        return service.cambiarEstadoPago(id, request.estadoPago());
     }
 
     @PostMapping("/{id}/cancelar")

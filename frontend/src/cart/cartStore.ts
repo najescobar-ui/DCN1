@@ -9,9 +9,18 @@ export interface CartItem {
   cantidad: number
 }
 
+export interface Entrega {
+  direccion: string
+  lat: number | null
+  lon: number | null
+}
+
 export interface CartState {
   items: CartItem[]
   direccion: string
+  lat: number | null
+  lon: number | null
+  telefono: string
 }
 
 export interface CartApi extends CartState {
@@ -21,7 +30,8 @@ export interface CartApi extends CartState {
   setCantidad: (productoId: number, cantidad: number) => void
   remove: (productoId: number) => void
   clear: () => void
-  setDireccion: (direccion: string) => void
+  setEntrega: (entrega: Entrega) => void
+  setTelefono: (telefono: string) => void
 }
 
 export const CartContext = createContext<CartApi | null>(null)

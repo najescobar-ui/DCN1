@@ -47,8 +47,20 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 | POST | `/api/pedidos` | ms-pedidos | pedidos.write | CLIENTE o ADMIN |
 | PATCH | `/api/pedidos/{id}/estado` | ms-pedidos | pedidos.write | ADMIN |
 | POST | `/api/pedidos/{id}/cancelar` | ms-pedidos | pedidos.write | dueño (si está PENDIENTE) |
+| PATCH | `/api/pedidos/{id}/pago` | ms-pedidos | pedidos.write | ADMIN (confirma transferencia/efectivo) |
+| POST | `/api/pedidos/{id}/pago/webpay` | ms-pedidos | pedidos.write | dueño (inicia pago con tarjeta) |
+| GET, POST | `/api/pagos/webpay/retorno` | ms-pedidos | pública | retorno del navegador desde Webpay |
 
 Respuestas de error en `application/problem+json`: 400 validación, 401 token ausente/inválido, 403 sin rol o scope, 404, 409, 422, 502.
+
+## Pagos y entrega
+
+- **Tarjeta:** Transbank **Webpay Plus**, ambiente de integración (gratuito). `ms-pedidos` crea la transacción, el navegador paga en Webpay y vuelve a `/api/pagos/webpay/retorno` (ruta pública en API Gateway). El backend confirma la transacción directamente con Transbank, verifica el monto y marca el pedido como pagado o rechazado. Los datos de la tarjeta nunca pasan por Pedidos360.
+  Tarjeta de prueba: `4051 8856 0044 6623`, CVV `123`, cualquier vencimiento futuro; en el banco simulado, RUT `11.111.111-1` y clave `123`.
+- **Transferencia:** se muestran datos bancarios (ficticios) y un botón de WhatsApp con el mensaje del comprobante; un ADMIN confirma el pago.
+- **Efectivo:** pago al recibir; un ADMIN lo confirma al entregar.
+- **Dirección:** autocompletado con [Photon](https://photon.komoot.io) (OpenStreetMap, sin API key) y mapa Leaflet con tiles de OpenStreetMap; se guardan dirección y coordenadas.
+- **Celular:** obligatorio en el registro de Cognito (`phone_number`) y en cada pedido.
 
 ## Pantallas
 

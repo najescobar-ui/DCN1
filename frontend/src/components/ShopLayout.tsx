@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from
 import { useSession } from '../auth/useSession'
 import { useCart } from '../cart/useCart'
 import { Brand } from './Brand'
+import { Footer } from './Footer'
 import { CartIcon, PinIcon, SearchIcon } from './icons'
 import { Toast } from './Toast'
 
@@ -81,7 +82,10 @@ export function ShopLayout() {
           </Link>
         </div>
       </header>
-      <Outlet />
+      <div className="shop-content">
+        <Outlet />
+      </div>
+      <Footer />
       <Toast />
     </>
   )

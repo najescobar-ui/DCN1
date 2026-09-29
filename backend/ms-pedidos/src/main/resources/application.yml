@@ -24,6 +24,17 @@ app:
   # Internal URL of ms-productos (same EC2 host in AWS).
   productos-url: ${PRODUCTOS_URL:http://localhost:8081}
 
+  pagos:
+    # Comma separated; the first one is the default return target after Webpay.
+    frontend-origins: ${FRONTEND_ORIGINS:http://localhost:4200}
+    webpay:
+      # Transbank integration (sandbox) environment. The commerce code and key below are the public
+      # test credentials published by Transbank; production values must come from the environment.
+      base-url: ${WEBPAY_BASE_URL:https://webpay3gint.transbank.cl}
+      commerce-code: ${WEBPAY_COMMERCE_CODE:597055555532}
+      api-key: ${WEBPAY_API_KEY:579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C}
+      return-url: ${WEBPAY_RETURN_URL:http://localhost:8082/api/pagos/webpay/retorno}
+
 management:
   endpoints:
     web:
