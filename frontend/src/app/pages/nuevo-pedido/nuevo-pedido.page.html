@@ -1,0 +1,45 @@
+<h1>Nuevo pedido</h1>
+
+<div class="card table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Producto</th>
+        <th>Precio</th>
+        <th>Disponibles</th>
+        <th style="width: 120px">Cantidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (p of productos(); track p.id) {
+        <tr>
+          <td>
+            <strong>{{ p.nombre }}</strong>
+            <div class="muted">{{ p.descripcion }}</div>
+          </td>
+          <td>{{ p.precio | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+          <td>{{ p.stock }}</td>
+          <td>
+            <input
+              type="number"
+              min="0"
+              [max]="p.stock"
+              [ngModel]="cantidades()[p.id] ?? 0"
+              (ngModelChange)="cambiarCantidad(p.id, $event)"
+            />
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <label>Direccion de entrega <input [(ngModel)]="direccion" maxlength="250" placeholder="Calle, numero, comuna" /></label>
+  <div class="actions">
+    <span class="stat">{{ total() | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</span>
+    <button class="btn" type="button" [disabled]="items().length === 0 || enviando()" (click)="confirmar()">
+      Confirmar pedido
+    </button>
+  </div>
+</div>

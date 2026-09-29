@@ -1,0 +1,61 @@
+<h1>Productos</h1>
+
+@if (auth.isAdmin()) {
+  <form class="card" [formGroup]="form" (ngSubmit)="guardar()">
+    <h2>{{ editandoId() === null ? 'Nuevo producto' : 'Editar producto #' + editandoId() }}</h2>
+    <div class="form-row">
+      <label>Nombre <input formControlName="nombre" /></label>
+      <label>Precio (CLP) <input type="number" formControlName="precio" min="1" /></label>
+      <label>Stock <input type="number" formControlName="stock" min="0" /></label>
+    </div>
+    <label>Descripcion <textarea formControlName="descripcion" rows="2"></textarea></label>
+    @if (form.touched && form.invalid) {
+      <p class="error">Revisa los campos: nombre obligatorio, precio mayor a 0 y stock no negativo.</p>
+    }
+    <div class="actions">
+      <button class="btn" type="submit">Guardar</button>
+      @if (editandoId() !== null) {
+        <button class="btn secondary" type="button" (click)="cancelarEdicion()">Cancelar</button>
+      }
+    </div>
+  </form>
+}
+
+<div class="card table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Producto</th>
+        <th>Precio</th>
+        <th>Stock</th>
+        @if (auth.isAdmin()) {
+          <th></th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (p of productos(); track p.id) {
+        <tr>
+          <td>{{ p.id }}</td>
+          <td>
+            <strong>{{ p.nombre }}</strong>
+            <div class="muted">{{ p.descripcion }}</div>
+          </td>
+          <td>{{ p.precio | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+          <td>{{ p.stock }}</td>
+          @if (auth.isAdmin()) {
+            <td class="actions">
+              <button class="btn small secondary" type="button" (click)="editar(p)">Editar</button>
+              <button class="btn small danger" type="button" (click)="eliminar(p)">Eliminar</button>
+            </td>
+          }
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5" class="muted">No hay productos.</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

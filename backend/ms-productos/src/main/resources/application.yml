@@ -1,0 +1,28 @@
+server:
+  port: ${PORT:8081}
+
+spring:
+  application:
+    name: ms-productos
+  # Local default: in-memory H2. In AWS set DB_URL/DB_USER/DB_PASSWORD to the RDS PostgreSQL instance.
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:productos;DB_CLOSE_DELAY=-1}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    open-in-view: false
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
