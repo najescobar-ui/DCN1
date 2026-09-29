@@ -1,7 +1,15 @@
 /**
- * Address search with Photon (https://photon.komoot.io), a free geocoder built on OpenStreetMap
- * data that is meant for search-as-you-type. Results are biased to Chile.
+ * Address search for the checkout. Uses Mapbox when a public token is configured (good house
+ * numbers in Chile) and Photon / OpenStreetMap otherwise or if Mapbox fails. Both providers share
+ * the ranking and the "typed address wins" rules below.
  */
+import { config } from '../../config'
+import * as mapbox from './mapbox'
+import * as photon from './photon'
+
+export const normalizar = (s: string) =>
+  s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim()
+
 export interface Lugar {
   etiqueta: string
   lat: number
@@ -12,50 +20,6 @@ export interface Lugar {
   calle?: string
   /** house = exact address, street = a street without number, place = a business or landmark. */
   tipo?: 'house' | 'street' | 'place'
-}
-
-interface PhotonFeature {
-  geometry: { coordinates: [number, number] }
-  properties: Record<string, string | undefined>
-}
-
-const BASE = 'https://photon.komoot.io'
-const CHILE_BBOX = '-75.7,-56,-66.4,-17.5'
-
-export const normalizar = (s: string) =>
-  s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim()
-
-/** In Greater Santiago OSM puts "Santiago" as city and the comuna in district. */
-function comunaDe(p: PhotonFeature['properties']): string | undefined {
-  return p.city === 'Santiago' && p.district ? p.district : (p.city ?? p.district ?? p.county)
-}
-
-function tipoDe(p: PhotonFeature['properties']): Lugar['tipo'] {
-  if (p.housenumber && (p.osm_value === 'house_number' || p.osm_key === 'building' || p.type === 'house')) return 'house'
-  if (p.osm_key === 'highway' || p.type === 'street') return 'street'
-  return 'place'
-}
-
-/** "Street number, comuna"; a place name is shown only when the result is not a plain address. */
-function etiqueta(p: PhotonFeature['properties'], tipo: Lugar['tipo']): string {
-  const calle = p.street ? `${p.street}${p.housenumber ? ' ' + p.housenumber : ''}` : undefined
-  const nombre = tipo === 'place' || !calle ? p.name : undefined
-  return [nombre, calle, comunaDe(p)].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ')
-}
-
-function toLugar(f: PhotonFeature): Lugar {
-  const [lon, lat] = f.geometry.coordinates
-  const p = f.properties
-  const tipo = tipoDe(p)
-  return {
-    etiqueta: etiqueta(p, tipo),
-    lat,
-    lon,
-    numero: p.housenumber,
-    comuna: comunaDe(p),
-    calle: p.street ?? (tipo === 'street' ? p.name : undefined),
-    tipo,
-  }
 }
 
 /** Street number typed by the user ("Av. Providencia 1234, Providencia" -> "1234"). */
@@ -98,34 +62,38 @@ export function ordenar(lugares: Lugar[], escrito: string): Lugar[] {
     .map((x) => x.l)
 }
 
-async function photon(texto: string, signal?: AbortSignal): Promise<Lugar[]> {
-  // lang=default returns local (Spanish) names instead of English ones.
-  const params = new URLSearchParams({ q: texto, limit: '6', lat: '-33.45', lon: '-70.66', bbox: CHILE_BBOX, lang: 'default' })
-  const res = await fetch(`${BASE}/api/?${params}`, { signal })
-  if (!res.ok) throw new Error(`Photon ${res.status}`)
-  const data = (await res.json()) as { features: PhotonFeature[] }
-  return data.features.filter((f) => f.properties.country === 'Chile' || !f.properties.country).map(toLugar)
-}
+export const proveedor = config.mapboxToken ? 'mapbox' : 'photon'
 
-/**
- * Searches the full text (finds exact houses when OSM has them) and the text without the number
- * (finds the street when the house is missing), then merges and ranks both.
- */
-export async function buscarDirecciones(texto: string, signal?: AbortSignal): Promise<Lugar[]> {
+const unicos = (lugares: Lugar[]) =>
+  lugares.filter((l, i, all) => all.findIndex((o) => o.etiqueta === l.etiqueta || (o.lat === l.lat && o.lon === l.lon)) === i)
+
+/** Photon: the full text finds exact houses, the text without number finds the street when OSM lacks the house. */
+async function buscarEnPhoton(texto: string, signal?: AbortSignal): Promise<Lugar[]> {
   const consultas = [texto]
   if (numeroEscrito(texto)) consultas.push(sinNumero(texto))
-  const resultados = (await Promise.all(consultas.map((q) => photon(q, signal)))).flat()
-  const unicos = resultados.filter(
-    (l, i, all) => all.findIndex((o) => o.etiqueta === l.etiqueta || (o.lat === l.lat && o.lon === l.lon)) === i,
-  )
-  return ordenar(unicos, texto).slice(0, 6)
+  return (await Promise.all(consultas.map((q) => photon.buscar(q, signal)))).flat()
+}
+
+export async function buscarDirecciones(texto: string, signal?: AbortSignal): Promise<Lugar[]> {
+  let resultados: Lugar[] = []
+  if (config.mapboxToken) {
+    resultados = await mapbox.buscar(texto, config.mapboxToken, signal).catch((error: unknown) => {
+      if ((error as Error).name === 'AbortError') throw error
+      return [] // quota, network or token problem: fall back to Photon
+    })
+  }
+  if (resultados.length === 0) {
+    resultados = await buscarEnPhoton(texto, signal)
+  }
+  return ordenar(unicos(resultados), texto).slice(0, 6)
 }
 
 export async function direccionEn(lat: number, lon: number): Promise<Lugar | null> {
-  const res = await fetch(`${BASE}/reverse?lat=${lat}&lon=${lon}&limit=1&lang=default`)
-  if (!res.ok) return null
-  const data = (await res.json()) as { features: PhotonFeature[] }
-  return data.features[0] ? { ...toLugar(data.features[0]), lat, lon } : null
+  if (config.mapboxToken) {
+    const lugar = await mapbox.reverso(lat, lon, config.mapboxToken).catch(() => null)
+    if (lugar) return lugar
+  }
+  return photon.reverso(lat, lon)
 }
 
 /**

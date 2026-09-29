@@ -1821,7 +1821,7 @@ h3 {
 }
 
 /* Dark map from the standard OSM tiles */
-.map .leaflet-tile-pane {
+.map-osm .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
 }
 

@@ -1,6 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
+import { config } from '../config'
 import { buscarDirecciones, combinarDireccion, direccionEn, type Lugar } from '../utils/geocoding'
 import { PinIcon, SearchIcon } from './icons'
 
@@ -38,11 +39,23 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
       lat != null && lon != null ? [lat, lon] : SANTIAGO,
       lat != null ? 16 : 11,
     )
-    // OpenStreetMap standard tiles (free, attribution required); darkened with CSS to match the theme.
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(m)
+    if (config.mapboxToken) {
+      // Mapbox dark style as raster tiles (free tier: 200k tile requests/month).
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/512/{z}/{x}/{y}@2x?access_token=${config.mapboxToken}`, {
+        tileSize: 512,
+        zoomOffset: -1,
+        maxZoom: 20,
+        attribution:
+          '&copy; <a href="https://www.mapbox.com/about/maps/">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> <a href="https://www.mapbox.com/map-feedback/">Improve this map</a>',
+      }).addTo(m)
+    } else {
+      // OpenStreetMap standard tiles (free, attribution required); darkened with CSS to match the theme.
+      mapEl.current.classList.add('map-osm')
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(m)
+    }
     const mk = L.marker(lat != null && lon != null ? [lat, lon] : SANTIAGO, { draggable: true, icon: pinIcon })
     if (lat != null) mk.addTo(m)
     // Dragging only adjusts the point on the map; the address the user typed is kept.

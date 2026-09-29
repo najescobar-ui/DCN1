@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_COGNITO_DOMAIN: string
   readonly VITE_COGNITO_CLIENT_ID: string
   readonly VITE_COGNITO_SCOPE: string
+  readonly VITE_MAPBOX_TOKEN?: string
 }
 
 interface ImportMeta {
