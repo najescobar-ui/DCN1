@@ -46,7 +46,7 @@ export function CarritoPage() {
     try {
       const pedido = await api.crearPedido({
         items: cart.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
-        direccionEntrega: cart.direccion.trim(),
+        direccionEntrega: [cart.direccion.trim(), cart.detalle.trim()].filter(Boolean).join(', '),
         telefono: cart.telefono,
         latitud: cart.lat,
         longitud: cart.lon,
@@ -138,6 +138,16 @@ export function CarritoPage() {
                 lon={cart.lon}
                 onChange={(v) => cart.setEntrega({ direccion: v.direccion, lat: v.lat, lon: v.lon })}
               />
+              <label className="field" style={{ maxWidth: 420 }}>
+                Depto, casa o referencia <span className="faint" style={{ fontWeight: 400 }}>(opcional)</span>
+                <input
+                  className="input"
+                  value={cart.detalle}
+                  maxLength={60}
+                  placeholder="Ej: depto 502, torre B, portón verde"
+                  onChange={(e) => cart.setDetalle(e.target.value)}
+                />
+              </label>
               {intento && errores.direccion && <span className="error-text">{errores.direccion}</span>}
             </section>
 
