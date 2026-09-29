@@ -28,8 +28,18 @@ public class Producto {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal precio;
 
+    /** Price before the current discount; null when the product is not on sale. */
+    @Column(name = "precio_anterior", precision = 12, scale = 2)
+    private BigDecimal precioAnterior;
+
     @Column(nullable = false)
     private Integer stock;
+
+    @Column(length = 40)
+    private String categoria;
+
+    @Column(name = "imagen_url", length = 300)
+    private String imagenUrl;
 
     @Column(nullable = false)
     private boolean activo = true;
@@ -40,11 +50,9 @@ public class Producto {
     protected Producto() {
     }
 
-    public Producto(String nombre, String descripcion, BigDecimal precio, Integer stock) {
-        this.nombre = nombre;
-        this.descripcion = descripcion;
-        this.precio = precio;
-        this.stock = stock;
+    public Producto(String nombre, String descripcion, String categoria, BigDecimal precio,
+            BigDecimal precioAnterior, Integer stock, String imagenUrl) {
+        actualizar(nombre, descripcion, categoria, precio, precioAnterior, stock, imagenUrl);
     }
 
     @PrePersist
@@ -52,11 +60,15 @@ public class Producto {
         creadoEn = Instant.now();
     }
 
-    public void actualizar(String nombre, String descripcion, BigDecimal precio, Integer stock) {
+    public void actualizar(String nombre, String descripcion, String categoria, BigDecimal precio,
+            BigDecimal precioAnterior, Integer stock, String imagenUrl) {
         this.nombre = nombre;
         this.descripcion = descripcion;
+        this.categoria = categoria;
         this.precio = precio;
+        this.precioAnterior = precioAnterior;
         this.stock = stock;
+        this.imagenUrl = imagenUrl;
     }
 
     public void desactivar() {
@@ -77,6 +89,18 @@ public class Producto {
 
     public BigDecimal getPrecio() {
         return precio;
+    }
+
+    public BigDecimal getPrecioAnterior() {
+        return precioAnterior;
+    }
+
+    public String getCategoria() {
+        return categoria;
+    }
+
+    public String getImagenUrl() {
+        return imagenUrl;
     }
 
     public Integer getStock() {

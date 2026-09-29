@@ -27,7 +27,8 @@ class MsProductosApplicationTests {
     private static final SimpleGrantedAuthority CLIENTE = new SimpleGrantedAuthority("ROLE_CLIENTE");
 
     private static final String NUEVO = """
-            {"nombre":"Empanada de pino","descripcion":"Horneada","precio":2500,"stock":30}
+            {"nombre":"Empanada de pino","descripcion":"Horneada","categoria":"Empanadas","precio":2500,"stock":30,
+             "imagenUrl":"/img/productos/empanada.jpg"}
             """;
 
     @Autowired
@@ -69,13 +70,29 @@ class MsProductosApplicationTests {
         mvc.perform(json(post("/api/productos"), NUEVO).with(jwt().authorities(WRITE, ADMIN)))
                 .andExpect(status().isCreated())
                 .andExpect(header().exists("Location"))
-                .andExpect(jsonPath("$.nombre").value("Empanada de pino"));
+                .andExpect(jsonPath("$.nombre").value("Empanada de pino"))
+                .andExpect(jsonPath("$.categoria").value("Empanadas"));
     }
 
     @Test
     void productoInvalidoResponde400() throws Exception {
         mvc.perform(json(post("/api/productos"), "{\"nombre\":\"\",\"precio\":-1}").with(jwt().authorities(WRITE, ADMIN)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void precioAnteriorMenorAlPrecioResponde400() throws Exception {
+        String body = "{\"nombre\":\"X\",\"categoria\":\"Pizzas\",\"precio\":5000,\"precioAnterior\":4000,\"stock\":1}";
+        mvc.perform(json(post("/api/productos"), body).with(jwt().authorities(WRITE, ADMIN)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void catalogoIncluyeCategoriaEImagen() throws Exception {
+        mvc.perform(get("/api/productos/1").with(jwt().authorities(READ)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoria").exists())
+                .andExpect(jsonPath("$.imagenUrl").value(org.hamcrest.Matchers.startsWith("/img/productos/")));
     }
 
     @Test
