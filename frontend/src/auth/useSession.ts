@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAuth } from 'react-oidc-context'
-import { signOut, signupManager } from './oidc'
+import { signOut, signinArgs, signupManager } from './oidc'
 import { decodeJwt, rolesFrom, scopesFrom } from './tokenClaims'
 
 /** Session data derived from the access token (the one sent to API Gateway). */
@@ -20,8 +20,8 @@ export function useSession() {
     scopes: scopesFrom(claims),
     isAdmin: roles.includes('ADMIN'),
     username: claims?.username ?? '',
-    login: (returnTo?: string) => auth.signinRedirect({ state: { returnTo } }),
-    register: () => signupManager.signinRedirect(),
+    login: (returnTo?: string) => auth.signinRedirect(signinArgs(returnTo)),
+    register: () => signupManager.signinRedirect(signinArgs()),
     // Clears the local session and ends the Cognito session (its cookie would log the user back in).
     logout: signOut,
   }
