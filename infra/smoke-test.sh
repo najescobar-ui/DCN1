@@ -35,12 +35,24 @@ check 200 cliente GET    /api/productos "$CLIENTE"
 check 200 cliente GET    /api/productos/1 "$CLIENTE"
 check 403 cliente POST   /api/productos "$CLIENTE" '{"nombre":"X","categoria":"Pizzas","precio":1000,"stock":1}'
 check 403 cliente DELETE /api/productos/1 "$CLIENTE"
+# Un cliente solo puede tener un pedido en curso: se cierran los que hayan quedado de una corrida anterior.
+curl -s "$API_URL/api/pedidos" -H "Authorization: Bearer $CLIENTE" | python3 -c '
+import sys, json
+siguiente = {"PENDIENTE": "CANCELADO", "CONFIRMADO": "CANCELADO", "DESPACHADO": "ENTREGADO"}
+for p in json.load(sys.stdin):
+    if p["estado"] in siguiente:
+        print(p["id"], siguiente[p["estado"]])' | while read -r id estado; do
+  curl -s -o /dev/null -X PATCH "$API_URL/api/pedidos/$id/estado" -H "Authorization: Bearer $ADMIN" \
+    -H 'Content-Type: application/json' -d "{\"estado\":\"$estado\"}"
+  echo "   (limpieza: pedido #$id de una corrida anterior -> $estado)"
+done
 NUEVO=$(curl -s -X POST "$API_URL/api/pedidos" -H "Authorization: Bearer $CLIENTE" -H 'Content-Type: application/json' \
   -d '{"items":[{"productoId":1,"cantidad":2},{"productoId":4,"cantidad":1}],"direccionEntrega":"Av. Providencia 1234, Providencia","telefono":"+56 9 0000 0002","latitud":-33.4263,"longitud":-70.6203,"metodoPago":"TARJETA"}')
 PEDIDO_ID=$(python3 -c 'import sys,json;print(json.loads(sys.argv[1])["id"])' "$NUEVO")
 echo "OK 201 pedido creado #$PEDIDO_ID: $(head -c 110 <<<"$NUEVO")"
 check 200 cliente GET    /api/pedidos "$CLIENTE"
 check 200 cliente GET    "/api/pedidos/$PEDIDO_ID" "$CLIENTE"
+check 409 cliente POST   /api/pedidos "$CLIENTE" '{"items":[{"productoId":1,"cantidad":1}],"direccionEntrega":"Av. Providencia 1234","telefono":"+56900000002","metodoPago":"EFECTIVO"}'
 check 403 cliente PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$CLIENTE" '{"estado":"DESPACHADO"}'
 check 200 cliente GET    /api/bff/resumen "$CLIENTE"
 check 400 cliente POST   /api/pedidos "$CLIENTE" '{"items":[]}'
@@ -53,6 +65,9 @@ check 303 publico GET    "/api/pagos/webpay/retorno?token_ws=token-inexistente" 
 echo; echo "--- ADMIN"
 check 200 admin GET    /api/pedidos "$ADMIN"
 check 200 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"CONFIRMADO"}'
+check 409 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"PENDIENTE"}'
+check 200 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"DESPACHADO"}'
+check 200 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"ENTREGADO"}'
 NUEVO_PRODUCTO=$(curl -s -o /tmp/pedidos360-body -w '%{http_code}' -X POST "$API_URL/api/productos" -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
   -d '{"nombre":"Empanada de pino","descripcion":"Horneada","categoria":"Empanadas","precio":2500,"stock":30}')
 echo "$([ "$NUEVO_PRODUCTO" = 201 ] && echo OK || echo XX) $NUEVO_PRODUCTO (esperado 201) admin     POST    /api/productos                   $(head -c 110 /tmp/pedidos360-body)"

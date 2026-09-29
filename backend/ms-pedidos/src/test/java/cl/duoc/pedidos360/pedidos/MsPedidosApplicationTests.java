@@ -118,6 +118,31 @@ class MsPedidosApplicationTests {
     }
 
     @Test
+    void noSePuedeHacerOtroPedidoConUnoEnCurso() throws Exception {
+        Long id = crearPedido("ana");
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("ana")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("pedido en curso")));
+        // Otro cliente no se ve afectado.
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("pedro")))
+                .andExpect(status().isCreated());
+        // Una vez entregado, puede pedir de nuevo.
+        cambiarEstado(id, "CONFIRMADO");
+        cambiarEstado(id, "DESPACHADO");
+        cambiarEstado(id, "ENTREGADO");
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("ana")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void despuesDeCancelarSePuedePedirDeNuevo() throws Exception {
+        Long id = crearPedido("ana");
+        mvc.perform(post("/api/pedidos/" + id + "/cancelar").with(cliente("ana"))).andExpect(status().isOk());
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("ana")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     void noSePuedeSaltarPasosNiRetroceder() throws Exception {
         Long id = crearPedido("ana");
         cambiarEstado(id, "ENTREGADO").andExpect(status().isConflict());

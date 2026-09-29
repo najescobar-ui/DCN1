@@ -64,8 +64,8 @@ export function ShopLayout() {
             <div className="menu">
               <div className="menu-head">
                 <strong>{session.username}</strong>
-                <div className="m faint" style={{ fontSize: 11 }}>
-                  cognito:groups = {session.roles.join(', ')}
+                <div className="muted" style={{ fontSize: 13 }}>
+                  {session.rolVisible}
                 </div>
               </div>
               <Link to="/pedidos">Mis pedidos</Link>

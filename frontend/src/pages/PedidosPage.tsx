@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { api } from '../api/api'
-import { ESTADO_LABEL, ESTADO_PAGO_LABEL, METODO_LABEL, codigoPedido, type EstadoPedido, type Pedido, type Producto } from '../api/models'
+import { ESTADOS, ESTADO_LABEL, ESTADO_PAGO_LABEL, METODO_LABEL, codigoPedido, type EstadoPedido, type Pedido, type Producto } from '../api/models'
 import { useSession } from '../auth/useSession'
 import { useCart } from '../cart/useCart'
 import { BackIcon } from '../components/icons'
 import { DatosTransferencia } from '../components/PaymentInfo'
+import { Paginacion, ThOrdenable } from '../components/tabla'
+import { useTabla } from '../components/useTabla'
 import { formatearTelefono } from '../utils/telefono'
 import { TEXTO_SEGUIMIENTO, encuadre, imagenSeguimiento, unidades } from '../utils/seguimiento'
 import { irAWebpay } from '../utils/webpay'
@@ -96,6 +98,18 @@ export function PedidosPage() {
     return () => clearInterval(timer)
   }, [enCurso, cargar])
   const historial = useMemo(() => (pedidos ?? []).filter((p) => p !== activo), [pedidos, activo])
+  // El estado se ordena por su posición en el flujo (Recibido → Entregado → Cancelado), no alfabéticamente.
+  const tabla = useTabla(
+    historial,
+    {
+      pedido: (p) => p.id,
+      fecha: (p) => p.creadoEn,
+      total: (p) => p.total,
+      estado: (p) => ESTADOS.indexOf(p.estado),
+      pago: (p) => `${p.metodoPago ?? ''} ${p.estadoPago ?? ''}`,
+    },
+    { columna: 'fecha', direccion: 'desc' },
+  )
 
   const cancelar = async (pedido: Pedido) => {
     try {
@@ -149,9 +163,6 @@ export function PedidosPage() {
           <BackIcon />
           Volver al catálogo
         </Link>
-        <span className="m muted" style={{ fontSize: 12 }}>
-          SESIÓN: {session.username.toUpperCase()} · GRUPO: {session.roles.join(', ')}
-        </span>
       </div>
       <h1 className="d page-title">{session.isAdmin ? 'Pedidos' : 'Mis pedidos'}</h1>
 
@@ -193,6 +204,16 @@ export function PedidosPage() {
                 )}
               </div>
             </div>
+            <ul className="tracker-items" aria-label="Productos del pedido">
+              {activo.items.map((i) => (
+                <li key={i.productoId}>
+                  <span>
+                    {i.cantidad}× {i.nombreProducto}
+                  </span>
+                  <span className="muted">{clp(i.subtotal)}</span>
+                </li>
+              ))}
+            </ul>
             <ol className="tracker-steps">
               {FLUJO.map((estado, i) => {
                 const actual = FLUJO.indexOf(activo.estado)
@@ -269,17 +290,27 @@ export function PedidosPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Pedido</th>
+                  <ThOrdenable columna="pedido" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                    Pedido
+                  </ThOrdenable>
                   <th>Productos</th>
-                  <th>Fecha</th>
-                  <th>Total</th>
-                  <th>Estado</th>
-                  <th>Pago</th>
+                  <ThOrdenable columna="fecha" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                    Fecha
+                  </ThOrdenable>
+                  <ThOrdenable columna="total" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                    Total
+                  </ThOrdenable>
+                  <ThOrdenable columna="estado" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                    Estado
+                  </ThOrdenable>
+                  <ThOrdenable columna="pago" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                    Pago
+                  </ThOrdenable>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {historial.map((p) => (
+                {tabla.filas.map((p) => (
                   <tr key={p.id}>
                     <td className="m" style={{ fontSize: 13 }}>
                       {codigoPedido(p.id)}
@@ -305,6 +336,7 @@ export function PedidosPage() {
               </tbody>
             </table>
           </div>
+          <Paginacion {...tabla} nombre="pedidos" />
         </section>
       )}
     </div>

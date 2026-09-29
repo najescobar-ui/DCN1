@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/api'
 import { ESTADOS, ESTADO_LABEL, SIGUIENTES, codigoPedido, type EstadoPago, type EstadoPedido, type Pedido, type Resumen } from '../../api/models'
-import { SearchIcon, ShieldIcon } from '../../components/icons'
+import { SearchIcon } from '../../components/icons'
+import { Paginacion, ThOrdenable } from '../../components/tabla'
+import { useTabla } from '../../components/useTabla'
 import { clp, fecha } from '../../utils/format'
 import { PagoBadge } from '../PedidosPage'
 import { formatearTelefono } from '../../utils/telefono'
@@ -31,6 +33,19 @@ export function AdminPedidosPage() {
         (!q || codigoPedido(p.id).toLowerCase().includes(q) || (p.clienteUsername ?? '').toLowerCase().includes(q)),
     )
   }, [pedidos, tab, query])
+
+  const tabla = useTabla(
+    filas,
+    {
+      pedido: (p) => p.id,
+      cliente: (p) => p.clienteUsername ?? p.clienteId,
+      fecha: (p) => p.creadoEn,
+      total: (p) => p.total,
+      pago: (p) => `${p.metodoPago ?? ''} ${p.estadoPago ?? ''}`,
+      estado: (p) => ESTADOS.indexOf(p.estado),
+    },
+    { columna: 'fecha', direccion: 'desc' },
+  )
 
   const cambiarEstado = async (pedido: Pedido, estado: EstadoPedido) => {
     try {
@@ -103,43 +118,56 @@ export function AdminPedidosPage() {
         <table className="table">
           <thead>
             <tr>
-              <th>Pedido</th>
-              <th>Cliente</th>
+              <ThOrdenable columna="pedido" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Pedido
+              </ThOrdenable>
+              <ThOrdenable columna="cliente" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Cliente
+              </ThOrdenable>
               <th>Detalle</th>
-              <th>Fecha</th>
-              <th>Total</th>
-              <th>Pago</th>
-              <th>Estado</th>
+              <ThOrdenable columna="fecha" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Fecha
+              </ThOrdenable>
+              <ThOrdenable columna="total" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Total
+              </ThOrdenable>
+              <ThOrdenable columna="pago" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Pago
+              </ThOrdenable>
+              <ThOrdenable columna="estado" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Estado
+              </ThOrdenable>
             </tr>
           </thead>
           <tbody>
-            {filas.map((p) => (
+            {tabla.filas.map((p) => (
               <tr key={p.id}>
-                <td className="m" style={{ fontSize: 13 }}>
+                <td className="m" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
                   {codigoPedido(p.id)}
                 </td>
                 <td>
                   {p.clienteUsername ?? p.clienteId}
                   {p.telefonoContacto && (
                     <div>
-                      <a href={`tel:${p.telefonoContacto}`} className="m" style={{ fontSize: 12 }}>
+                      <a href={`tel:${p.telefonoContacto}`} className="m" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                         {formatearTelefono(p.telefonoContacto)}
                       </a>
                     </div>
                   )}
                 </td>
-                <td className="muted" style={{ fontSize: 14 }}>
+                <td className="muted" style={{ fontSize: 14, minWidth: 220 }}>
                   {p.items.map((i) => `${i.cantidad}× ${i.nombreProducto}`).join(', ')}
                   {p.direccionEntrega && <div className="faint">{p.direccionEntrega}</div>}
                 </td>
-                <td className="muted" style={{ whiteSpace: 'nowrap' }}>
-                  {fecha(p.creadoEn)}
+                <td className="muted" style={{ whiteSpace: 'nowrap', fontSize: 14 }}>
+                  {fecha(p.creadoEn).split(', ')[0]}
+                  <div className="faint">{fecha(p.creadoEn).split(', ')[1]}</div>
                 </td>
                 <td style={{ fontWeight: 700 }}>{clp(p.total)}</td>
                 <td>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
                     <PagoBadge pedido={p} />
-                    {p.metodoPago && p.metodoPago !== 'TARJETA' && p.estadoPago !== 'PAGADO' && (
+                    {p.metodoPago && p.metodoPago !== 'TARJETA' && p.estadoPago !== 'PAGADO' && p.estado !== 'CANCELADO' && (
                       <button type="button" className="btn btn-sm btn-ghost" onClick={() => cambiarPago(p, 'PAGADO')}>
                         Marcar pagado
                       </button>
@@ -151,7 +179,7 @@ export function AdminPedidosPage() {
                     <span className="sr-only">Estado del pedido {codigoPedido(p.id)}</span>
                     <select
                       className="select"
-                      style={{ minWidth: 160 }}
+                      style={{ minWidth: 150 }}
                       value={p.estado}
                       disabled={SIGUIENTES[p.estado].length === 0}
                       onChange={(e) => cambiarEstado(p, e.target.value as EstadoPedido)}
@@ -178,10 +206,7 @@ export function AdminPedidosPage() {
         </table>
       </div>
 
-      <div className="notice">
-        <ShieldIcon size={18} className="accent" style={{ flexShrink: 0 }} />
-        Vista visible solo para el grupo ADMIN. Un usuario CLIENTE que llame a estos endpoints recibe 403.
-      </div>
+      <Paginacion {...tabla} nombre="pedidos" />
     </>
   )
 }

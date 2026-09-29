@@ -85,7 +85,7 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 | POST | `/api/pedidos/{id}/pago/webpay` | ms-pedidos | pedidos.write | dueño (inicia el pago con tarjeta) |
 | GET, POST | `/api/pagos/webpay/retorno` | ms-pedidos | pública | retorno del navegador desde Webpay |
 
-**Estados del pedido:** `PENDIENTE` (Recibido) → `CONFIRMADO` (En preparación) → `DESPACHADO` (En camino) → `ENTREGADO`. Solo se avanza al siguiente estado; se puede pasar a `CANCELADO` desde Recibido o En preparación. El cliente puede cancelar mientras el pedido está Recibido y sin pagar. Un pedido en efectivo queda pagado al marcarse como entregado. Cualquier otro cambio responde 409.
+**Estados del pedido:** `PENDIENTE` (Recibido) → `CONFIRMADO` (En preparación) → `DESPACHADO` (En camino) → `ENTREGADO`. Solo se avanza al siguiente estado; se puede pasar a `CANCELADO` desde Recibido o En preparación. Cada cliente tiene como máximo **un pedido en curso**: puede hacer otro cuando se entregue o se cancele. El cliente puede cancelar mientras el pedido está Recibido y sin pagar. Un pedido en efectivo queda pagado al marcarse como entregado. Cualquier otro cambio responde 409.
 
 Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol o scope, 404, 409, 422 y 502.
 
@@ -106,10 +106,10 @@ Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol
 | `/catalogo` | autenticado | Catálogo con búsqueda, categorías y ofertas |
 | `/producto/:id` | autenticado | Detalle del producto |
 | `/carrito` | CLIENTE o ADMIN | Carrito, dirección con mapa, celular y método de pago |
-| `/pedidos` | autenticado | Seguimiento del pedido (se actualiza solo cada 15 s, con una imagen por estado), estado del pago e historial |
+| `/pedidos` | autenticado | Seguimiento del pedido con su detalle (se actualiza solo cada 15 s, con una imagen por estado) e historial ordenable y paginado |
 | `/perfil` | autenticado | Claims de los tokens y pruebas contra la API (token válido, sin token, token alterado) |
-| `/admin` | ADMIN | Gestión de pedidos y pagos (indicadores desde el BFF) |
-| `/admin/productos` | ADMIN | Mantenedor del catálogo |
+| `/admin` | ADMIN | Gestión de pedidos y pagos (indicadores desde el BFF), tabla ordenable y paginada |
+| `/admin/productos` | ADMIN | Mantenedor del catálogo, tabla ordenable y paginada |
 
 ## Estructura
 
@@ -160,9 +160,9 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 | Qué | Cómo | Cantidad |
 |---|---|---|
-| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado y transiciones de estado) | 52 |
-| Frontend | `npm test` en `frontend/` (Vitest) | 26 |
-| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN | 25 verificaciones |
+| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado y un pedido en curso por cliente) | 54 |
+| Frontend | `npm test` en `frontend/` (Vitest) | 28 |
+| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo | 29 verificaciones |
 
 ## Variables de entorno
 
@@ -210,7 +210,7 @@ Las credenciales del lab expiran cada ~4 horas; al reiniciar el lab hay que volv
 
 ## Flujo de trabajo
 
-- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.3.0`).
+- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.3.1`).
 - `dev`: integración.
 - `feature/*`, `fix/*`, `chore/*`, `docs/*`: una rama por cambio, que sale de `dev` y vuelve por Pull Request.
 
