@@ -1,7 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import { buscarDirecciones, combinarDireccion, direccionEn, ordenarPorNumero, type Lugar } from '../utils/geocoding'
+import { buscarDirecciones, combinarDireccion, direccionEn, type Lugar } from '../utils/geocoding'
 import { PinIcon, SearchIcon } from './icons'
 
 interface Props {
@@ -78,7 +78,7 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
     const timer = setTimeout(async () => {
       setBuscando(true)
       try {
-        setSugerencias(ordenarPorNumero(await buscarDirecciones(q, ctrl.signal), q))
+        setSugerencias(await buscarDirecciones(q, ctrl.signal))
         setAbierto(true)
       } catch {
         // Aborted or offline: keep the typed text.
