@@ -36,6 +36,19 @@ export const signupManager = new UserManager({
   },
 })
 
+/**
+ * Set while signing out, so route guards do not start a new login in the moment between
+ * clearing the local session and leaving for Cognito's /logout.
+ */
+let signingOut = false
+export const isSigningOut = () => signingOut
+
+export async function signOut(): Promise<void> {
+  signingOut = true
+  await userManager.removeUser()
+  window.location.assign(cognitoLogoutUrl())
+}
+
 /** Cognito does not publish end_session_endpoint, so its /logout endpoint is called explicitly. */
 export function cognitoLogoutUrl(): string {
   const params = new URLSearchParams({ client_id: clientId, logout_uri: window.location.origin })
