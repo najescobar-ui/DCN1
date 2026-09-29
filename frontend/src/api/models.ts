@@ -24,6 +24,15 @@ export const ESTADO_LABEL: Record<EstadoPedido, string> = {
   CANCELADO: 'Cancelado',
 }
 
+/** Estados a los que puede pasar un pedido (misma regla que EstadoPedido.siguientes() en ms-pedidos). */
+export const SIGUIENTES: Record<EstadoPedido, EstadoPedido[]> = {
+  PENDIENTE: ['CONFIRMADO', 'CANCELADO'],
+  CONFIRMADO: ['DESPACHADO', 'CANCELADO'],
+  DESPACHADO: ['ENTREGADO'],
+  ENTREGADO: [],
+  CANCELADO: [],
+}
+
 export const codigoPedido = (id: number) => `#P360-${String(id).padStart(5, '0')}`
 
 export interface ItemPedido {

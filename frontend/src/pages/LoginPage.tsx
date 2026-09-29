@@ -16,8 +16,8 @@ export function LoginPage() {
       <section className="login-art">
         <div className="saw" style={{ top: 0, zIndex: 3 }} />
         <img
-          src="/img/pudu/pudu-tostado.jpg"
-          alt="Mascota de Pedidos360: un pudú con gorro y bufanda esperando pan tostado con palta"
+          src="/img/pudu/pudu-home.jpg"
+          alt="Mascota de Pedidos360: el pudú y su equipo cocinando sushi y hamburguesas"
         />
         <div className="login-brand">
           <Brand to="/" large />

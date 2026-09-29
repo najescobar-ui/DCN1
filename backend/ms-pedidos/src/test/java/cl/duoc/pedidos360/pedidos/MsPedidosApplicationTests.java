@@ -91,11 +91,60 @@ class MsPedidosApplicationTests {
     @Test
     void soloAdminCambiaEstado() throws Exception {
         Long id = crearPedido("ana");
-        String body = "{\"estado\":\"DESPACHADO\"}";
+        String body = "{\"estado\":\"CONFIRMADO\"}";
         mvc.perform(patch("/api/pedidos/" + id + "/estado").contentType(MediaType.APPLICATION_JSON).content(body)
                 .with(cliente("ana"))).andExpect(status().isForbidden());
         mvc.perform(patch("/api/pedidos/" + id + "/estado").contentType(MediaType.APPLICATION_JSON).content(body)
-                .with(admin())).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("DESPACHADO"));
+                .with(admin())).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("CONFIRMADO"));
+    }
+
+    @Test
+    void elPedidoAvanzaEnOrdenHastaEntregado() throws Exception {
+        Long id = crearPedido("ana");
+        for (String estado : new String[] { "CONFIRMADO", "DESPACHADO", "ENTREGADO" }) {
+            cambiarEstado(id, estado).andExpect(status().isOk()).andExpect(jsonPath("$.estado").value(estado));
+        }
+    }
+
+    @Test
+    void alEntregarUnPedidoEnEfectivoElPagoQuedaConfirmado() throws Exception {
+        String body = PEDIDO.replace("\"TARJETA\"", "\"EFECTIVO\"");
+        String json = mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(cliente("ana"))).andReturn().getResponse().getContentAsString();
+        Long id = Long.valueOf(json.replaceAll("^\\{\"id\":(\\d+).*", "$1"));
+        cambiarEstado(id, "CONFIRMADO");
+        cambiarEstado(id, "DESPACHADO").andExpect(jsonPath("$.estadoPago").value("PENDIENTE"));
+        cambiarEstado(id, "ENTREGADO").andExpect(jsonPath("$.estadoPago").value("PAGADO"));
+    }
+
+    @Test
+    void noSePuedeSaltarPasosNiRetroceder() throws Exception {
+        Long id = crearPedido("ana");
+        cambiarEstado(id, "ENTREGADO").andExpect(status().isConflict());
+        cambiarEstado(id, "CONFIRMADO").andExpect(status().isOk());
+        cambiarEstado(id, "PENDIENTE").andExpect(status().isConflict());
+    }
+
+    @Test
+    void noSePuedeCancelarDespuesDeDespachar() throws Exception {
+        Long id = crearPedido("ana");
+        cambiarEstado(id, "CONFIRMADO");
+        cambiarEstado(id, "DESPACHADO");
+        cambiarEstado(id, "CANCELADO").andExpect(status().isConflict());
+    }
+
+    @Test
+    void elClienteNoPuedeCancelarUnPedidoPagado() throws Exception {
+        Long id = crearPedido("ana");
+        mvc.perform(patch("/api/pedidos/" + id + "/pago").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estadoPago\":\"PAGADO\"}").with(admin())).andExpect(status().isOk());
+        mvc.perform(post("/api/pedidos/" + id + "/cancelar").with(cliente("ana")))
+                .andExpect(status().isConflict());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions cambiarEstado(Long id, String estado) throws Exception {
+        return mvc.perform(patch("/api/pedidos/" + id + "/estado").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"estado\":\"" + estado + "\"}").with(admin()));
     }
 
     @Test
