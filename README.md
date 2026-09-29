@@ -189,6 +189,8 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 ## Despliegue en AWS (Learner Lab)
 
+El paso a paso para operar, desplegar y montar todo en otro lab está en [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
 CloudFront está bloqueado en AWS Academy, así que el frontend se publica en **Amplify Hosting**, que entrega HTTPS (Cognito lo exige en las URLs de callback).
 
 Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan los IDs creados en `infra/state.env` (ignorado por git, incluye la clave de la BD y la de los usuarios de prueba).
@@ -201,8 +203,11 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `04-apigw.sh` | HTTP API con CORS (solo el sitio principal; `CORS_DEV=1` agrega preview y localhost), authorizer JWT de Cognito y una ruta por endpoint con su scope |
 | `05-deploy-backend.sh` | BD `pedidos`, variables de entorno en la EC2 y despliegue de los 3 servicios con systemd |
 | `06-deploy-frontend.sh` | Build de producción de React y publicación en Amplify (`BRANCH=preview` publica un ambiente de revisión) |
+| `07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores de Cognito y API Gateway |
 | `08-cognito-ui.sh` | Logo y colores de Pedidos360 en el Hosted UI de Cognito (`infra/cognito-ui/`) |
 | `09-cognito-registro.sh` | Lambda *post confirmation* que agrega a cada usuario registrado al grupo CLIENTE |
+| `encender.sh` | Enciende la EC2 y RDS si el lab las apagó y espera a que los servicios respondan |
+| `ssh-mi-ip.sh` | Autoriza SSH desde tu IP actual (cuando cambias de red) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
 | `smoke-test.sh` | Evidencia end-to-end: cada ruta sin token, con token alterado, como CLIENTE y como ADMIN |
 
