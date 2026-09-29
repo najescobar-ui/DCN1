@@ -38,7 +38,7 @@ export function Footer() {
         </div>
       </div>
       <div className="container faint site-footer-legal">
-        © {YEAR} {EMPRESA.nombre} · Proyecto académico · datos bancarios y redes ficticios.
+        © {YEAR} {EMPRESA.nombre} · Proyecto académico · datos de contacto ficticios.
       </div>
     </footer>
   )
