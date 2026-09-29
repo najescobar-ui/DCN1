@@ -35,7 +35,8 @@ class MsPedidosApplicationTests {
     private static final SimpleGrantedAuthority WRITE = new SimpleGrantedAuthority("SCOPE_pedidos360/pedidos.write");
 
     private static final String PEDIDO = """
-            {"items":[{"productoId":1,"cantidad":2}],"direccionEntrega":"Av. Siempre Viva 742"}
+            {"items":[{"productoId":1,"cantidad":2}],"direccionEntrega":"Av. Siempre Viva 742",
+             "telefono":"+56 9 1234 5678","latitud":-33.43,"longitud":-70.62,"metodoPago":"TARJETA"}
             """;
 
     @Autowired
@@ -64,7 +65,10 @@ class MsPedidosApplicationTests {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estado").value("PENDIENTE"))
                 .andExpect(jsonPath("$.total").value(25980))
-                .andExpect(jsonPath("$.clienteId").value("ana"));
+                .andExpect(jsonPath("$.clienteId").value("ana"))
+                .andExpect(jsonPath("$.telefonoContacto").value("+56912345678"))
+                .andExpect(jsonPath("$.metodoPago").value("TARJETA"))
+                .andExpect(jsonPath("$.estadoPago").value("PENDIENTE"));
     }
 
     @Test
@@ -108,6 +112,30 @@ class MsPedidosApplicationTests {
         given(productosClient.obtener(anyLong())).willThrow(new ProductoNoDisponibleException("Producto 9 no existe"));
         mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("ana")))
                 .andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
+    void telefonoInvalidoResponde400() throws Exception {
+        String body = PEDIDO.replace("+56 9 1234 5678", "12345");
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(body).with(cliente("ana")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void pedidoSinMetodoDePagoResponde400() throws Exception {
+        String body = PEDIDO.replace(",\"metodoPago\":\"TARJETA\"", "");
+        mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(body).with(cliente("ana")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void soloAdminConfirmaPagosManuales() throws Exception {
+        Long id = crearPedido("ana");
+        String body = "{\"estadoPago\":\"PAGADO\"}";
+        mvc.perform(patch("/api/pedidos/" + id + "/pago").contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(cliente("ana"))).andExpect(status().isForbidden());
+        mvc.perform(patch("/api/pedidos/" + id + "/pago").contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(admin())).andExpect(status().isOk()).andExpect(jsonPath("$.estadoPago").value("PAGADO"));
     }
 
     @Test

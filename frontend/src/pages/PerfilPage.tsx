@@ -4,6 +4,7 @@ import type { Usuario } from '../api/models'
 import { useSession } from '../auth/useSession'
 import { config } from '../config'
 import { fecha } from '../utils/format'
+import { alterarFirma } from '../utils/jwt'
 
 interface Prueba {
   titulo: string
@@ -41,8 +42,7 @@ export function PerfilPage() {
   }
 
   const token = session.accessToken ?? ''
-  // Flip the last signature character: same claims, invalid signature.
-  const alterado = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A')
+  const alterado = alterarFirma(token)
 
   return (
     <div className="container page">

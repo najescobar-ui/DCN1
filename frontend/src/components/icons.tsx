@@ -82,3 +82,46 @@ export const TrashIcon = (p: IconProps) => (
     <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
   </Icon>
 )
+
+export const CardIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2.5" y="5" width="19" height="14" rx="2" />
+    <path d="M2.5 10h19M6 15h4" />
+  </Icon>
+)
+
+export const TransferIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 10h14l-4-4M20 14H6l4 4" />
+  </Icon>
+)
+
+export const CashIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="2.5" y="6" width="19" height="12" rx="1.5" />
+    <circle cx="12" cy="12" r="2.5" />
+    <path d="M6 9v.01M18 15v.01" />
+  </Icon>
+)
+
+/* Brand glyphs (simplified outlines) */
+export const InstagramIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" />
+  </Icon>
+)
+
+export const FacebookIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M15 3h-2.5A3.5 3.5 0 0 0 9 6.5V9H6.5v3.5H9V21h3.5v-8.5h2.8l.7-3.5h-3.5V7a1 1 0 0 1 1-1H15z" />
+  </Icon>
+)
+
+export const WhatsappIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M3.5 20.5l1.3-4.1A8.5 8.5 0 1 1 8 19.4z" />
+    <path d="M9 8.5c0 3.5 2.9 6.5 6.5 6.5l1-1.6-2-1.1-1 .9a5 5 0 0 1-2.7-2.7l.9-1-1.1-2z" />
+  </Icon>
+)

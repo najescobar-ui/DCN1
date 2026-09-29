@@ -22,6 +22,10 @@ if [ -z "${AUTHORIZER_ID:-}" ]; then
     --jwt-configuration "Audience=$COGNITO_CLIENT_ID,Issuer=$COGNITO_ISSUER_URI" \
     --query AuthorizerId --output text)
   save AUTHORIZER_ID "$AUTHORIZER_ID"
+else
+  # Keeps the authorizer in sync if the user pool or app client changed.
+  aws apigatewayv2 update-authorizer --api-id "$API_ID" --authorizer-id "$AUTHORIZER_ID" \
+    --jwt-configuration "Audience=$COGNITO_CLIENT_ID,Issuer=$COGNITO_ISSUER_URI" >/dev/null
 fi
 
 log "Integrations (one per microservice, original path forwarded)"
@@ -43,15 +47,18 @@ integration pedidos 8082
 
 log "Routes"
 EXISTING=$(aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].RouteKey' --output text)
-route() {  # "METHOD /path" integration scope
+route() {  # "METHOD /path" integration scope|PUBLIC
   if grep -qxF "$1" <<<"$(tr '\t' '\n' <<<"$EXISTING")"; then
     echo "  = $1"; return
   fi
-  local integ="INTEG_$2" scope_args=()
-  [ -n "$3" ] && scope_args=(--authorization-scopes "$3")
+  local integ="INTEG_$2" auth_args=(--authorization-type JWT --authorizer-id "$AUTHORIZER_ID")
+  if [ "$3" = PUBLIC ]; then
+    auth_args=(--authorization-type NONE)
+  elif [ -n "$3" ]; then
+    auth_args+=(--authorization-scopes "$3")
+  fi
   aws apigatewayv2 create-route --api-id "$API_ID" --route-key "$1" \
-    --target "integrations/${!integ}" --authorization-type JWT --authorizer-id "$AUTHORIZER_ID" \
-    "${scope_args[@]}" >/dev/null
+    --target "integrations/${!integ}" "${auth_args[@]}" >/dev/null
   echo "  + $1 -> $2 ${3:-(solo token valido)}"
 }
 route "GET /api/bff/me"                   bff       ""
@@ -66,6 +73,12 @@ route "GET /api/pedidos/{id}"             pedidos   "pedidos360/pedidos.read"
 route "POST /api/pedidos"                 pedidos   "pedidos360/pedidos.write"
 route "PATCH /api/pedidos/{id}/estado"    pedidos   "pedidos360/pedidos.write"
 route "POST /api/pedidos/{id}/cancelar"   pedidos   "pedidos360/pedidos.write"
+route "PATCH /api/pedidos/{id}/pago"      pedidos   "pedidos360/pedidos.write"
+route "POST /api/pedidos/{id}/pago/webpay" pedidos  "pedidos360/pedidos.write"
+# Webpay sends the customer's browser back here (GET or form POST) without a bearer token;
+# ms-pedidos validates the transaction token directly with Transbank.
+route "GET /api/pagos/webpay/retorno"     pedidos   PUBLIC
+route "POST /api/pagos/webpay/retorno"    pedidos   PUBLIC
 
 log "Stage \$default (auto deploy, throttling)"
 if ! aws apigatewayv2 get-stage --api-id "$API_ID" --stage-name '$default' >/dev/null 2>&1; then

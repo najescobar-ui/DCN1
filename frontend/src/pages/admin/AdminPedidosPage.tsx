@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/api'
-import { ESTADOS, ESTADO_LABEL, codigoPedido, type EstadoPedido, type Pedido, type Resumen } from '../../api/models'
+import { ESTADOS, ESTADO_LABEL, codigoPedido, type EstadoPago, type EstadoPedido, type Pedido, type Resumen } from '../../api/models'
 import { SearchIcon, ShieldIcon } from '../../components/icons'
 import { clp, fecha } from '../../utils/format'
+import { PagoBadge } from '../PedidosPage'
+import { formatearTelefono } from '../../utils/telefono'
 import { notify } from '../../utils/notify'
 
 type Tab = 'TODOS' | EstadoPedido
@@ -34,6 +36,16 @@ export function AdminPedidosPage() {
     try {
       await api.cambiarEstado(pedido.id, estado)
       notify.ok(`${codigoPedido(pedido.id)} → ${ESTADO_LABEL[estado]}`)
+      cargar()
+    } catch {
+      // The interceptor already showed the error.
+    }
+  }
+
+  const cambiarPago = async (pedido: Pedido, estadoPago: EstadoPago) => {
+    try {
+      await api.cambiarEstadoPago(pedido.id, estadoPago)
+      notify.ok(`${codigoPedido(pedido.id)}: pago marcado como ${estadoPago === 'PAGADO' ? 'pagado' : estadoPago.toLowerCase()}`)
       cargar()
     } catch {
       // The interceptor already showed the error.
@@ -96,6 +108,7 @@ export function AdminPedidosPage() {
               <th>Detalle</th>
               <th>Fecha</th>
               <th>Total</th>
+              <th>Pago</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -105,7 +118,16 @@ export function AdminPedidosPage() {
                 <td className="m" style={{ fontSize: 13 }}>
                   {codigoPedido(p.id)}
                 </td>
-                <td>{p.clienteUsername ?? p.clienteId}</td>
+                <td>
+                  {p.clienteUsername ?? p.clienteId}
+                  {p.telefonoContacto && (
+                    <div>
+                      <a href={`tel:${p.telefonoContacto}`} className="m" style={{ fontSize: 12 }}>
+                        {formatearTelefono(p.telefonoContacto)}
+                      </a>
+                    </div>
+                  )}
+                </td>
                 <td className="muted" style={{ fontSize: 14 }}>
                   {p.items.map((i) => `${i.cantidad}× ${i.nombreProducto}`).join(', ')}
                   {p.direccionEntrega && <div className="faint">{p.direccionEntrega}</div>}
@@ -114,6 +136,16 @@ export function AdminPedidosPage() {
                   {fecha(p.creadoEn)}
                 </td>
                 <td style={{ fontWeight: 700 }}>{clp(p.total)}</td>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+                    <PagoBadge pedido={p} />
+                    {p.metodoPago && p.metodoPago !== 'TARJETA' && p.estadoPago !== 'PAGADO' && (
+                      <button type="button" className="btn btn-sm btn-ghost" onClick={() => cambiarPago(p, 'PAGADO')}>
+                        Marcar pagado
+                      </button>
+                    )}
+                  </div>
+                </td>
                 <td>
                   <label>
                     <span className="sr-only">Estado del pedido {codigoPedido(p.id)}</span>
@@ -135,7 +167,7 @@ export function AdminPedidosPage() {
             ))}
             {pedidos !== null && filas.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">
+                <td colSpan={7} className="muted">
                   No hay pedidos en esta vista.
                 </td>
               </tr>

@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router'
 import { Brand } from '../components/Brand'
+import { SocialLinks } from '../components/Footer'
 import { LoginIcon, ShieldIcon } from '../components/icons'
 import { useSession } from '../auth/useSession'
 
@@ -53,6 +54,12 @@ export function LoginPage() {
               <strong>Inicio de sesión seguro</strong>
               <small>Te autenticas en Amazon Cognito con OpenID Connect (Authorization Code + PKCE).</small>
             </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span className="faint" style={{ fontSize: 13 }}>
+              Síguenos
+            </span>
+            <SocialLinks />
           </div>
         </div>
       </section>

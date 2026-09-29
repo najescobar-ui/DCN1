@@ -34,12 +34,34 @@ export interface ItemPedido {
   subtotal: number
 }
 
+export type MetodoPago = 'TARJETA' | 'TRANSFERENCIA' | 'EFECTIVO'
+export type EstadoPago = 'PENDIENTE' | 'PAGADO' | 'RECHAZADO'
+
+export const METODO_LABEL: Record<MetodoPago, string> = {
+  TARJETA: 'Tarjeta (Webpay)',
+  TRANSFERENCIA: 'Transferencia',
+  EFECTIVO: 'Efectivo al recibir',
+}
+
+export const ESTADO_PAGO_LABEL: Record<EstadoPago, string> = {
+  PENDIENTE: 'Pago pendiente',
+  PAGADO: 'Pagado',
+  RECHAZADO: 'Pago rechazado',
+}
+
 export interface Pedido {
   id: number
   clienteId: string
   clienteUsername?: string
   direccionEntrega?: string
+  telefonoContacto?: string
+  latitud?: number | null
+  longitud?: number | null
   estado: EstadoPedido
+  metodoPago?: MetodoPago | null
+  estadoPago?: EstadoPago | null
+  pagoAutorizacion?: string | null
+  pagoTarjeta?: string | null
   total: number
   items: ItemPedido[]
   creadoEn: string
@@ -48,7 +70,11 @@ export interface Pedido {
 
 export interface CrearPedidoRequest {
   items: { productoId: number; cantidad: number }[]
-  direccionEntrega?: string
+  direccionEntrega: string
+  telefono: string
+  latitud?: number | null
+  longitud?: number | null
+  metodoPago: MetodoPago
 }
 
 export interface Usuario {

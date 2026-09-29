@@ -20,7 +20,7 @@ if [ -z "${USER_POOL_ID:-}" ]; then
     --alias-attributes email \
     --auto-verified-attributes email \
     --username-configuration CaseSensitive=false \
-    --schema Name=email,Required=true,Mutable=true \
+    --schema Name=email,Required=true,Mutable=true Name=phone_number,Required=true,Mutable=true \
     --policies 'PasswordPolicy={MinimumLength=8,RequireUppercase=true,RequireLowercase=true,RequireNumbers=true,RequireSymbols=false}' \
     --account-recovery-setting 'RecoveryMechanisms=[{Priority=1,Name=verified_email}]' \
     --user-pool-tags Project=$PROJECT \
@@ -81,16 +81,17 @@ fi
 echo "COGNITO_DOMAIN=$COGNITO_DOMAIN"
 
 log "Test users"
-create_user() {  # user email password group
+create_user() {  # user email phone password group
   aws cognito-idp admin-create-user --user-pool-id "$USER_POOL_ID" --username "$1" \
-    --user-attributes Name=email,Value="$2" Name=email_verified,Value=true \
+    --user-attributes Name=email,Value="$2" Name=email_verified,Value=true Name=phone_number,Value="$3" \
     --message-action SUPPRESS >/dev/null 2>&1 || true
   aws cognito-idp admin-set-user-password --user-pool-id "$USER_POOL_ID" --username "$1" \
-    --password "$3" --permanent
-  aws cognito-idp admin-add-user-to-group --user-pool-id "$USER_POOL_ID" --username "$1" --group-name "$4"
-  echo "  $1 ($4)"
+    --password "$4" --permanent
+  aws cognito-idp admin-add-user-to-group --user-pool-id "$USER_POOL_ID" --username "$1" --group-name "$5"
+  echo "  $1 ($5)"
 }
 [ -z "${ADMIN_PASSWORD:-}" ] && save ADMIN_PASSWORD "Admin$(openssl rand -hex 3)!"
 [ -z "${CLIENTE_PASSWORD:-}" ] && save CLIENTE_PASSWORD "Cliente$(openssl rand -hex 3)!"
-create_user admin admin@pedidos360.test "$ADMIN_PASSWORD" ADMIN
-create_user cliente1 cliente1@pedidos360.test "$CLIENTE_PASSWORD" CLIENTE
+# Fictitious phone numbers for the demo users.
+create_user admin admin@pedidos360.test +56900000001 "$ADMIN_PASSWORD" ADMIN
+create_user cliente1 cliente1@pedidos360.test +56900000002 "$CLIENTE_PASSWORD" CLIENTE
