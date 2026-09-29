@@ -1,0 +1,14 @@
+.background-customizable { background-color: #0b0706; }
+.banner-customizable { background-color: #1a0c0a; padding: 22px 0; }
+.label-customizable { color: #f4e9e4; font-weight: 600; }
+.textDescription-customizable { color: #b8a39c; font-size: 14px; }
+.idpDescription-customizable { color: #b8a39c; }
+.legalText-customizable { color: #8f7a73; }
+.inputField-customizable { background-color: #0b0706; border: 1px solid #3b1f1a; border-radius: 4px; color: #f4e9e4; height: 44px; font-size: 15px; }
+.inputField-customizable:focus { border-color: #e0622f; outline: none; }
+.submitButton-customizable { background-color: #e0622f; border-color: #e0622f; border-radius: 4px; color: #0b0706; font-size: 16px; font-weight: 700; height: 48px; }
+.submitButton-customizable:hover { background-color: #f08a5d; border-color: #f08a5d; color: #0b0706; }
+.errorMessage-customizable { background-color: #2d1816; border: 1px solid #b3261e; border-radius: 4px; color: #ffb4ab; }
+.redirect-customizable { color: #e0622f; }
+.passwordCheck-notValid-customizable { color: #ffb4ab; }
+.passwordCheck-valid-customizable { color: #7ee2a8; }

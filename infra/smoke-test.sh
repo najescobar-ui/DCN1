@@ -31,7 +31,7 @@ echo; echo "--- CLIENTE"
 check 200 cliente GET    /api/bff/me "$CLIENTE"
 check 200 cliente GET    /api/productos "$CLIENTE"
 check 200 cliente GET    /api/productos/1 "$CLIENTE"
-check 403 cliente POST   /api/productos "$CLIENTE" '{"nombre":"X","precio":1000,"stock":1}'
+check 403 cliente POST   /api/productos "$CLIENTE" '{"nombre":"X","categoria":"Pizzas","precio":1000,"stock":1}'
 check 403 cliente DELETE /api/productos/1 "$CLIENTE"
 NUEVO=$(curl -s -X POST "$API_URL/api/pedidos" -H "Authorization: Bearer $CLIENTE" -H 'Content-Type: application/json' \
   -d '{"items":[{"productoId":1,"cantidad":2},{"productoId":4,"cantidad":1}],"direccionEntrega":"Av. Providencia 1234"}')
@@ -46,8 +46,8 @@ check 400 cliente POST   /api/pedidos "$CLIENTE" '{"items":[]}'
 echo; echo "--- ADMIN"
 check 200 admin GET    /api/pedidos "$ADMIN"
 check 200 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"CONFIRMADO"}'
-check 201 admin POST   /api/productos "$ADMIN" '{"nombre":"Empanada de pino","descripcion":"Horneada","precio":2500,"stock":30}'
-check 200 admin PUT    /api/productos/5 "$ADMIN" '{"nombre":"Brownie","descripcion":"Brownie con nueces","precio":3190,"stock":60}'
+check 201 admin POST   /api/productos "$ADMIN" '{"nombre":"Empanada de pino","descripcion":"Horneada","categoria":"Empanadas","precio":2500,"stock":30}'
+check 200 admin PUT    /api/productos/8 "$ADMIN" '{"nombre":"Brownie con helado","descripcion":"Brownie tibio con helado de vainilla","categoria":"Postres","precio":3990,"stock":35,"imagenUrl":"/img/productos/brownie.jpg"}'
 check 404 admin GET    /api/productos/9999 "$ADMIN"
 
 echo; echo "Resultado: $PASS OK, $FAIL con diferencias"

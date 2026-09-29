@@ -1,13 +1,13 @@
 # Pedidos360
 
-Proyecto de Desarrollo Cloud Native I (DSY1107). Sistema de pedidos con frontend Angular, microservicios Spring Boot en EC2, Amazon Cognito como IDaaS y AWS API Gateway como API Manager.
+Proyecto de Desarrollo Cloud Native I (DSY1107). Sistema de pedidos con frontend React, microservicios Spring Boot en EC2, Amazon Cognito como IDaaS y AWS API Gateway como API Manager.
 
-> Por autorización del docente se usa **Amazon Cognito** en lugar de Azure AD (MSAL). En el frontend, `angular-auth-oidc-client` cumple el rol de MSAL: flujo Authorization Code + PKCE, guards, interceptor que adjunta el token y lectura de roles y scopes desde los claims.
+> Por autorización del docente se usa **Amazon Cognito** en lugar de Azure AD (MSAL) y **React** en lugar de Angular. En el frontend, `react-oidc-context` (sobre `oidc-client-ts`) cumple el rol de MSAL: flujo Authorization Code + PKCE, guard de rutas (`ProtectedRoute`), interceptor de axios que adjunta el token y lectura de roles y scopes desde los claims.
 
 ## Arquitectura
 
 ```
-Navegador (Angular en Amplify Hosting, HTTPS)
+Navegador (React en Amplify Hosting, HTTPS)
    │  1. login OIDC (Auth Code + PKCE) ──► Cognito (managed login)
    │  2. Bearer access token
    ▼
@@ -50,6 +50,19 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 
 Respuestas de error en `application/problem+json`: 400 validación, 401 token ausente/inválido, 403 sin rol o scope, 404, 409, 422, 502.
 
+## Pantallas
+
+| Ruta | Acceso | Descripción |
+|---|---|---|
+| `/` | pública | Login: iniciar sesión o crear cuenta en el Hosted UI de Cognito |
+| `/catalogo` | autenticado | Catálogo con búsqueda, categorías y ofertas |
+| `/producto/:id` | autenticado | Detalle del producto |
+| `/carrito` | CLIENTE o ADMIN | Carrito, dirección de entrega y confirmación del pedido |
+| `/pedidos` | autenticado | Seguimiento del pedido en curso e historial |
+| `/perfil` | autenticado | Claims de los tokens y pruebas 200/401 contra la API |
+| `/admin` | ADMIN | Gestión de pedidos (usa el BFF para los indicadores) |
+| `/admin/productos` | ADMIN | Mantenedor del catálogo |
+
 ## Estructura
 
 ```
@@ -57,7 +70,7 @@ backend/
   ms-productos/   catálogo (JPA + PostgreSQL/H2)
   ms-pedidos/     pedidos; consulta precios a ms-productos reenviando el token
   bff/            backend for frontend: /me y /resumen agregado
-frontend/         Angular 22
+frontend/         React 19 + Vite + TypeScript
 deploy/ec2/       units systemd, plantilla de variables y script de despliegue
 infra/            scripts AWS CLI (Cognito, RDS, EC2, API Gateway, Amplify) y pruebas end-to-end
 ```
@@ -74,11 +87,12 @@ cd backend/ms-productos && ./mvnw spring-boot:run
 cd backend/ms-pedidos   && ./mvnw spring-boot:run
 cd backend/bff          && ./mvnw spring-boot:run
 
-# Frontend (proxy a los puertos 8080-8082)
-cd frontend && npm install && npm start      # http://localhost:4200
+# Frontend: por defecto usa la API de AWS (.env.development).
+# Para usar los backends locales: crear frontend/.env.development.local con VITE_API_URL= (vacío, proxy de Vite).
+cd frontend && npm install && npm run dev    # http://localhost:4200
 ```
 
-Tests: `./mvnw test` en cada servicio y `npx ng test --watch=false` en `frontend/`.
+Tests: `./mvnw test` en cada servicio y `npm test` en `frontend/`.
 
 ## Variables de entorno (backend)
 
@@ -103,7 +117,8 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `03-ec2.sh` | EC2 t3.small (Amazon Linux 2023 + Corretto 21) con Elastic IP |
 | `04-apigw.sh` | HTTP API con CORS, authorizer JWT de Cognito y una ruta por endpoint con su scope |
 | `05-deploy-backend.sh` | BD `pedidos`, variables de entorno en la EC2 y despliegue de los 3 servicios con systemd |
-| `06-deploy-frontend.sh` | Build de producción de Angular y publicación en Amplify |
+| `06-deploy-frontend.sh` | Build de producción de React y publicación en Amplify (`BRANCH=preview` publica un ambiente de revisión) |
+| `08-cognito-ui.sh` | Aplica logo y colores de Pedidos360 al Hosted UI de Cognito (`infra/cognito-ui/`) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
 | `smoke-test.sh` | Evidencia end-to-end: cada ruta sin token, con token alterado, como CLIENTE y como ADMIN |
 
