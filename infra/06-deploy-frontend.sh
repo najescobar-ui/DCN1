@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Builds the Angular app and publishes it to Amplify Hosting (manual zip deployment).
+# Builds the React app and publishes it to Amplify Hosting (manual zip deployment).
 source "$(dirname "$0")/lib.sh"
 
 log "Build"
-(cd "$INFRA_DIR/../frontend" && npx ng build --configuration production >/dev/null)
-DIST="$INFRA_DIR/../frontend/dist/frontend/browser"
+(cd "$INFRA_DIR/../frontend" && npm ci --silent && npm run build >/dev/null)
+DIST="$INFRA_DIR/../frontend/dist"
 ZIP="$(mktemp -d)/frontend.zip"
 (cd "$DIST" && zip -qr "$ZIP" .)
 
