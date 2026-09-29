@@ -1,6 +1,7 @@
 package cl.duoc.pedidos360.pedidos.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +15,6 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
 
     @EntityGraph(attributePaths = "items")
     List<Pedido> findByClienteIdOrderByCreadoEnDesc(String clienteId);
+
+    Optional<Pedido> findByPagoToken(String pagoToken);
 }

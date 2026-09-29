@@ -24,6 +24,8 @@ DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
 PRODUCTOS_URL=http://localhost:8081
 PEDIDOS_URL=http://localhost:8082
+FRONTEND_ORIGINS=$FRONTEND_URL,https://preview.$AMPLIFY_APP_ID.amplifyapp.com,http://localhost:4200
+WEBPAY_RETURN_URL=$API_URL/api/pagos/webpay/retorno
 ENV
 
 log "Build + deploy"

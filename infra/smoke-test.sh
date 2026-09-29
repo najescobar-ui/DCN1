@@ -4,7 +4,9 @@ source "$(dirname "$0")/lib.sh" >/dev/null
 DIR="$(dirname "$0")"
 CLIENTE=$("$DIR/get-token.sh" cliente1 "$CLIENTE_PASSWORD")
 ADMIN=$("$DIR/get-token.sh" admin "$ADMIN_PASSWORD")
-TAMPERED="${CLIENTE%?}$([ "${CLIENTE: -1}" = A ] && echo B || echo A)"
+# Change one character in the middle of the signature (the last base64url char is partly padding).
+tamper() { python3 -c 'import sys;h,p,s=sys.argv[1].split(".");i=len(s)//2;c="A" if s[i]!="A" else "B";print(".".join([h,p,s[:i]+c+s[i+1:]]))' "$1"; }
+TAMPERED=$(tamper "$CLIENTE")
 
 claims() { python3 -c 'import sys,json,base64;p=sys.argv[1].split(".")[1];p+="="*(-len(p)%4);d=json.loads(base64.urlsafe_b64decode(p));print(json.dumps({k:d.get(k) for k in ("token_use","client_id","username","cognito:groups","scope")}))' "$1"; }
 echo "cliente1 access token: $(claims "$CLIENTE")"
@@ -34,7 +36,7 @@ check 200 cliente GET    /api/productos/1 "$CLIENTE"
 check 403 cliente POST   /api/productos "$CLIENTE" '{"nombre":"X","categoria":"Pizzas","precio":1000,"stock":1}'
 check 403 cliente DELETE /api/productos/1 "$CLIENTE"
 NUEVO=$(curl -s -X POST "$API_URL/api/pedidos" -H "Authorization: Bearer $CLIENTE" -H 'Content-Type: application/json' \
-  -d '{"items":[{"productoId":1,"cantidad":2},{"productoId":4,"cantidad":1}],"direccionEntrega":"Av. Providencia 1234"}')
+  -d '{"items":[{"productoId":1,"cantidad":2},{"productoId":4,"cantidad":1}],"direccionEntrega":"Av. Providencia 1234, Providencia","telefono":"+56 9 0000 0002","latitud":-33.4263,"longitud":-70.6203,"metodoPago":"TARJETA"}')
 PEDIDO_ID=$(python3 -c 'import sys,json;print(json.loads(sys.argv[1])["id"])' "$NUEVO")
 echo "OK 201 pedido creado #$PEDIDO_ID: $(head -c 110 <<<"$NUEVO")"
 check 200 cliente GET    /api/pedidos "$CLIENTE"
@@ -42,6 +44,11 @@ check 200 cliente GET    "/api/pedidos/$PEDIDO_ID" "$CLIENTE"
 check 403 cliente PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$CLIENTE" '{"estado":"DESPACHADO"}'
 check 200 cliente GET    /api/bff/resumen "$CLIENTE"
 check 400 cliente POST   /api/pedidos "$CLIENTE" '{"items":[]}'
+check 400 cliente POST   /api/pedidos "$CLIENTE" '{"items":[{"productoId":1,"cantidad":1}],"direccionEntrega":"Calle 123","telefono":"123","metodoPago":"EFECTIVO"}'
+check 403 cliente PATCH  "/api/pedidos/$PEDIDO_ID/pago" "$CLIENTE" '{"estadoPago":"PAGADO"}'
+check 200 cliente POST   "/api/pedidos/$PEDIDO_ID/pago/webpay" "$CLIENTE" '{"origen":"http://localhost:4200"}'
+check 401 sin-token POST "/api/pedidos/$PEDIDO_ID/pago/webpay" ""
+check 303 publico GET    "/api/pagos/webpay/retorno?token_ws=token-inexistente" ""
 
 echo; echo "--- ADMIN"
 check 200 admin GET    /api/pedidos "$ADMIN"

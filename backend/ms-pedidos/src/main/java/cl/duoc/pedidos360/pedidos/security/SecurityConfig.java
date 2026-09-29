@@ -22,6 +22,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // Webpay sends the customer's browser here; the token is verified with Transbank.
+                        .requestMatchers("/api/pagos/webpay/retorno").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/pedidos/**").hasAuthority("SCOPE_pedidos360/pedidos.read")
                         .requestMatchers("/api/pedidos/**").hasAuthority("SCOPE_pedidos360/pedidos.write")
                         .anyRequest().authenticated())

@@ -1,29 +1,66 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api } from '../api/api'
-import { codigoPedido } from '../api/models'
+import { codigoPedido, type MetodoPago } from '../api/models'
+import { useSession } from '../auth/useSession'
 import { useCart } from '../cart/useCart'
-import { BackIcon, LockIcon, TrashIcon } from '../components/icons'
+import { AddressPicker } from '../components/AddressPicker'
+import { BackIcon, CardIcon, CashIcon, LockIcon, TransferIcon, TrashIcon } from '../components/icons'
+import { DatosTransferencia, DatosWebpay } from '../components/PaymentInfo'
 import { clp } from '../utils/format'
 import { imageOf } from '../utils/images'
 import { notify } from '../utils/notify'
+import { formatearTelefono, telefonoValido } from '../utils/telefono'
+import { irAWebpay } from '../utils/webpay'
+
+const METODOS: { id: MetodoPago; titulo: string; detalle: string; Icon: typeof CardIcon }[] = [
+  { id: 'TARJETA', titulo: 'Tarjeta', detalle: 'Débito o crédito con Webpay', Icon: CardIcon },
+  { id: 'TRANSFERENCIA', titulo: 'Transferencia', detalle: 'Envías el comprobante por WhatsApp', Icon: TransferIcon },
+  { id: 'EFECTIVO', titulo: 'Efectivo', detalle: 'Pagas al recibir tu pedido', Icon: CashIcon },
+]
 
 export function CarritoPage() {
   const cart = useCart()
+  const session = useSession()
   const navigate = useNavigate()
+  const [metodo, setMetodo] = useState<MetodoPago>('TARJETA')
   const [enviando, setEnviando] = useState(false)
-  const faltaDireccion = cart.direccion.trim().length < 5
+  const [intento, setIntento] = useState(false)
+
+  // Prefill the phone registered in Cognito (ID token claim) the first time.
+  const telefonoCuenta = session.idClaims?.phone_number as string | undefined
+  useEffect(() => {
+    if (!cart.telefono && telefonoCuenta) cart.setTelefono(formatearTelefono(telefonoCuenta))
+  }, [telefonoCuenta, cart])
+
+  const errores = {
+    direccion: cart.direccion.trim().length < 5 ? 'Ingresa la dirección de entrega.' : null,
+    telefono: !telefonoValido(cart.telefono) ? 'Ingresa un celular chileno, ej: +56 9 1234 5678.' : null,
+  }
+  const valido = !errores.direccion && !errores.telefono
 
   const confirmar = async () => {
+    setIntento(true)
+    if (!valido) return
     setEnviando(true)
     try {
       const pedido = await api.crearPedido({
         items: cart.items.map((i) => ({ productoId: i.productoId, cantidad: i.cantidad })),
         direccionEntrega: cart.direccion.trim(),
+        telefono: cart.telefono,
+        latitud: cart.lat,
+        longitud: cart.lon,
+        metodoPago: metodo,
       })
       cart.clear()
+      if (metodo === 'TARJETA') {
+        notify.ok(`Pedido ${codigoPedido(pedido.id)} creado. Te llevamos a Webpay...`)
+        const { url, token } = await api.iniciarWebpay(pedido.id)
+        irAWebpay(url, token)
+        return
+      }
       notify.ok(`Pedido ${codigoPedido(pedido.id)} recibido`)
-      navigate('/pedidos')
+      navigate(`/pedidos?nuevo=${pedido.id}`)
     } catch {
       setEnviando(false)
     }
@@ -44,7 +81,7 @@ export function CarritoPage() {
           <li className={`step-line ${cart.items.length ? 'done' : ''}`} aria-hidden="true" />
           <li className={cart.items.length ? 'done' : ''}>
             <span className="step-dot">2</span>
-            <span className="label">Entrega</span>
+            <span className="label">Entrega y pago</span>
           </li>
           <li className="step-line" aria-hidden="true" />
           <li>
@@ -93,38 +130,68 @@ export function CarritoPage() {
               ))}
             </section>
 
-            <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <h2 style={{ fontSize: 16 }}>Entrega a domicilio</h2>
-              <label className="field">
-                Dirección de entrega
-                <input
-                  className="input"
-                  value={cart.direccion}
-                  maxLength={250}
-                  placeholder="Calle, número, comuna"
-                  onChange={(e) => cart.setDireccion(e.target.value)}
-                  autoComplete="street-address"
-                />
-              </label>
-              {faltaDireccion && <span className="muted" style={{ fontSize: 13 }}>Ingresa una dirección para confirmar.</span>}
+            <section className="card card-pad checkout-section">
+              <h2 className="d">1 · Entrega</h2>
+              <AddressPicker
+                direccion={cart.direccion}
+                lat={cart.lat}
+                lon={cart.lon}
+                onChange={(v) => cart.setEntrega({ direccion: v.direccion, lat: v.lat, lon: v.lon })}
+              />
+              {intento && errores.direccion && <span className="error-text">{errores.direccion}</span>}
             </section>
 
-            <section className="card upsell">
-              <img src="/img/pudu/pudu-pizza.jpg" alt="El pudú de Pedidos360 mirando una pizza" />
-              <div className="upsell-text">
-                <span className="m accent" style={{ fontSize: 12, letterSpacing: '.1em' }}>
-                  ¿SE TE ANTOJA ALGO MÁS?
-                </span>
-                <span className="d" style={{ fontSize: 30 }}>
-                  Agrega una pizza familiar
-                </span>
-                <span className="muted" style={{ fontSize: 14 }}>
-                  Llega junto con el resto de tu pedido.
-                </span>
+            <section className="card card-pad checkout-section">
+              <h2 className="d">2 · Contacto</h2>
+              <label className="field" style={{ maxWidth: 320 }}>
+                Celular
+                <input
+                  className="input"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+56 9 1234 5678"
+                  value={cart.telefono}
+                  onChange={(e) => cart.setTelefono(e.target.value)}
+                  onBlur={(e) => cart.setTelefono(formatearTelefono(e.target.value))}
+                />
+              </label>
+              <span className="faint" style={{ fontSize: 12 }}>
+                El repartidor te llamará a este número si necesita ubicarte.
+              </span>
+              {intento && errores.telefono && <span className="error-text">{errores.telefono}</span>}
+            </section>
+
+            <section className="card card-pad checkout-section">
+              <h2 className="d">3 · Pago</h2>
+              <div className="pay-options" role="radiogroup" aria-label="Método de pago">
+                {METODOS.map(({ id, titulo, detalle, Icon }) => (
+                  <label key={id} className={`pay-option ${metodo === id ? 'active' : ''}`}>
+                    <input type="radio" name="metodo" value={id} checked={metodo === id} onChange={() => setMetodo(id)} />
+                    <Icon />
+                    <span>
+                      <strong>{titulo}</strong>
+                      <small>{detalle}</small>
+                    </span>
+                  </label>
+                ))}
               </div>
-              <Link to="/catalogo?cat=Pizzas" className="btn btn-outline">
-                Ver pizzas
-              </Link>
+              {metodo === 'TARJETA' && <DatosWebpay />}
+              {metodo === 'TRANSFERENCIA' && (
+                <>
+                  <DatosTransferencia total={cart.subtotal} />
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    Al confirmar te mostramos el botón para enviar el comprobante por WhatsApp.
+                  </span>
+                </>
+              )}
+              {metodo === 'EFECTIVO' && (
+                <div className="pay-details">
+                  <p style={{ margin: 0 }}>
+                    Pagas <strong>{clp(cart.subtotal)}</strong> en efectivo al recibir tu pedido. Si puedes, ten el monto justo.
+                  </p>
+                </div>
+              )}
             </section>
           </div>
 
@@ -140,13 +207,18 @@ export function CarritoPage() {
               <span>Despacho</span>
               <span style={{ color: 'var(--primary-hover)', fontWeight: 600 }}>Gratis</span>
             </div>
+            <div className="summary-row">
+              <span>Pago</span>
+              <span>{METODOS.find((m) => m.id === metodo)?.titulo}</span>
+            </div>
             <div className="summary-total">
               <span>Total</span>
               <span>{clp(cart.subtotal)}</span>
             </div>
-            <button type="button" className="btn btn-lg" onClick={confirmar} disabled={enviando || faltaDireccion}>
-              {enviando ? 'Enviando...' : 'Confirmar pedido'}
+            <button type="button" className="btn btn-lg" onClick={confirmar} disabled={enviando}>
+              {enviando ? 'Procesando...' : metodo === 'TARJETA' ? 'Confirmar y pagar' : 'Confirmar pedido'}
             </button>
+            {intento && !valido && <span className="error-text" style={{ fontSize: 13 }}>Revisa la dirección y el celular.</span>}
             <span className="faint" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
               <LockIcon />
               Pedido enviado con tu sesión autenticada. El precio final lo calcula el servidor.

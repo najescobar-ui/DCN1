@@ -1730,3 +1730,281 @@ h3 {
 .status-err {
   color: #ff8a80;
 }
+
+/* ---------- Checkout ---------- */
+.checkout-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.checkout-section h2 {
+  font-size: 22px;
+}
+
+.address-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.address-input {
+  position: relative;
+}
+
+.suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 1000;
+  margin: 4px 0 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.suggestions button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.suggestions button:hover {
+  background: var(--surface-2);
+}
+
+.map-wrap {
+  position: relative;
+}
+
+.map {
+  height: 260px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  z-index: 0;
+}
+
+.map-locate {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 500;
+  background: var(--bg);
+}
+
+.map-pin span {
+  display: block;
+  width: 28px;
+  height: 28px;
+  background: var(--primary);
+  border: 3px solid var(--bg);
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+.leaflet-container {
+  font-family: var(--font-body);
+  background: #1b1b1b;
+}
+
+/* Dark map from the standard OSM tiles */
+.map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
+}
+
+.leaflet-control-attribution {
+  background: rgba(11, 7, 6, 0.75) !important;
+  color: var(--muted) !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--primary) !important;
+}
+
+.pay-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .pay-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pay-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.pay-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pay-option span {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.pay-option small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pay-option:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.pay-option.active {
+  background: var(--surface-2);
+  border: 2px solid var(--primary);
+  padding: 11px 13px;
+}
+
+.pay-option.active svg {
+  color: var(--primary);
+}
+
+.pay-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--bg);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.test-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+
+.bank {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.bank dt {
+  color: var(--muted);
+}
+
+.bank dd {
+  margin: 0;
+}
+
+.btn-whatsapp {
+  align-self: flex-start;
+  background: #25d366;
+  border-color: #25d366;
+  color: #0b0706;
+}
+
+.btn-whatsapp:hover {
+  background: #4be083;
+  border-color: #4be083;
+  color: #0b0706;
+}
+
+.badge-pago-PAGADO {
+  background: #12301f;
+  border-color: #2f7a4b;
+  color: #9ff0bf;
+}
+
+.badge-pago-RECHAZADO {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.badge-pago-PENDIENTE {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* ---------- Footer ---------- */
+.shop-content {
+  min-height: calc(100vh - 76px - 150px);
+}
+
+.site-footer {
+  margin-top: 32px;
+  padding: 32px 0 24px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.site-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.site-footer-legal {
+  margin-top: 24px;
+  font-size: 12px;
+}
+
+.social {
+  display: flex;
+  gap: 10px;
+}
+
+.social a {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.social a:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--bg);
+}
+
+@media (max-width: 600px) {
+  .site-footer-inner > div:last-child {
+    align-items: flex-start !important;
+  }
+}
