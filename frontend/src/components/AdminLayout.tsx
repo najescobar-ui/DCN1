@@ -19,8 +19,8 @@ export function AdminLayout() {
         </nav>
         <div className="admin-user">
           <strong style={{ fontSize: 14 }}>{session.username}</strong>
-          <span className="m accent" style={{ fontSize: 11 }}>
-            cognito:groups = {session.roles.join(', ')}
+          <span className="accent" style={{ fontSize: 13 }}>
+            {session.rolVisible}
           </span>
           <button type="button" onClick={session.logout}>
             Cerrar sesión

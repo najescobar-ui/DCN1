@@ -25,6 +25,9 @@ import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
 @Transactional(readOnly = true)
 public class PedidoService {
 
+    private static final List<EstadoPedido> EN_CURSO = List.of(EstadoPedido.PENDIENTE, EstadoPedido.CONFIRMADO,
+            EstadoPedido.DESPACHADO);
+
     private final PedidoRepository repository;
     private final ProductosClient productosClient;
 
@@ -47,6 +50,11 @@ public class PedidoService {
     /** Prices come from ms-productos, never from the client request. */
     @Transactional
     public PedidoResponse crear(CrearPedidoRequest request, Usuario usuario) {
+        // Un cliente tiene como máximo un pedido en curso: el siguiente se puede hacer cuando se entregue o se cancele.
+        repository.findFirstByClienteIdAndEstadoInOrderByCreadoEnDesc(usuario.id(), EN_CURSO).ifPresent(enCurso -> {
+            throw new OperacionNoPermitidaException("Ya tienes un pedido en curso (#P360-%05d). Podrás hacer otro cuando se entregue o lo canceles."
+                    .formatted(enCurso.getId()));
+        });
         Pedido pedido = new Pedido(usuario.id(), usuario.username(), request.direccionEntrega().trim(),
                 request.telefonoNormalizado(), request.latitud(), request.longitud(), request.metodoPago());
         for (ItemRequest item : request.items()) {

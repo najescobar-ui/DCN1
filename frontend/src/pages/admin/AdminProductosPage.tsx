@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { api } from '../../api/api'
 import type { Producto, ProductoRequest } from '../../api/models'
+import { Paginacion, ThOrdenable } from '../../components/tabla'
+import { useTabla } from '../../components/useTabla'
 import { clp } from '../../utils/format'
 import { PRODUCT_IMAGES, descuento, imageOf } from '../../utils/images'
 import { notify } from '../../utils/notify'
 
 const CATEGORIAS = ['Hamburguesas', 'Pizzas', 'Sushi', 'Bebidas', 'Postres']
+/** Valor del selector que habilita escribir una categoría nueva. */
+const NUEVA = '__nueva__'
 
 interface Form {
   nombre: string
@@ -51,9 +55,28 @@ export function AdminProductosPage() {
 
   useEffect(cargar, [cargar])
 
+  // Categorías existentes: las de base más las que ya usan los productos, sin repetir.
+  const categorias = useMemo(
+    () => [...new Set([...CATEGORIAS, ...productos.map((p) => p.categoria).filter(Boolean) as string[]])].sort((a, b) => a.localeCompare(b, 'es')),
+    [productos],
+  )
+  const [categoriaNueva, setCategoriaNueva] = useState(false)
+
+  const tabla = useTabla(
+    productos,
+    {
+      producto: (p) => p.nombre,
+      categoria: (p) => p.categoria,
+      precio: (p) => p.precio,
+      stock: (p) => p.stock,
+    },
+    { columna: 'producto', direccion: 'asc' },
+  )
+
   const campo = (key: keyof Form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const editar = (p: Producto) => {
+    setCategoriaNueva(false)
     setEditandoId(p.id)
     setError(null)
     setForm({
@@ -69,6 +92,7 @@ export function AdminProductosPage() {
   }
 
   const limpiar = () => {
+    setCategoriaNueva(false)
     setEditandoId(null)
     setForm(VACIO)
     setError(null)
@@ -128,12 +152,32 @@ export function AdminProductosPage() {
             </label>
             <label className="field">
               Categoría
-              <input className="input" list="categorias" value={form.categoria} maxLength={40} onChange={campo('categoria')} />
-              <datalist id="categorias">
-                {CATEGORIAS.map((c) => (
-                  <option key={c} value={c} />
+              <select
+                className="select"
+                value={categoriaNueva ? NUEVA : form.categoria}
+                onChange={(e) => {
+                  const nueva = e.target.value === NUEVA
+                  setCategoriaNueva(nueva)
+                  setForm((f) => ({ ...f, categoria: nueva ? '' : e.target.value }))
+                }}
+              >
+                {categorias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
-              </datalist>
+                <option value={NUEVA}>Nueva categoría…</option>
+              </select>
+              {categoriaNueva && (
+                <input
+                  className="input"
+                  value={form.categoria}
+                  maxLength={40}
+                  placeholder="Nombre de la categoría"
+                  autoFocus
+                  onChange={campo('categoria')}
+                />
+              )}
             </label>
             <label className="field">
               Imagen
@@ -182,15 +226,23 @@ export function AdminProductosPage() {
           <thead>
             <tr>
               <th />
-              <th>Producto</th>
-              <th>Categoría</th>
-              <th>Precio</th>
-              <th>Stock</th>
+              <ThOrdenable columna="producto" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Producto
+              </ThOrdenable>
+              <ThOrdenable columna="categoria" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Categoría
+              </ThOrdenable>
+              <ThOrdenable columna="precio" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Precio
+              </ThOrdenable>
+              <ThOrdenable columna="stock" orden={tabla.orden} onOrdenar={tabla.ordenarPor}>
+                Stock
+              </ThOrdenable>
               <th />
             </tr>
           </thead>
           <tbody>
-            {productos.map((p) => {
+            {tabla.filas.map((p) => {
               const off = descuento(p.precio, p.precioAnterior)
               return (
                 <tr key={p.id}>
@@ -224,6 +276,7 @@ export function AdminProductosPage() {
           </tbody>
         </table>
       </div>
+      <Paginacion {...tabla} nombre="productos" />
     </>
   )
 }
