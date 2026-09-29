@@ -50,6 +50,19 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 
 Respuestas de error en `application/problem+json`: 400 validación, 401 token ausente/inválido, 403 sin rol o scope, 404, 409, 422, 502.
 
+## Pantallas
+
+| Ruta | Acceso | Descripción |
+|---|---|---|
+| `/` | pública | Login: iniciar sesión o crear cuenta en el Hosted UI de Cognito |
+| `/catalogo` | autenticado | Catálogo con búsqueda, categorías y ofertas |
+| `/producto/:id` | autenticado | Detalle del producto |
+| `/carrito` | CLIENTE o ADMIN | Carrito, dirección de entrega y confirmación del pedido |
+| `/pedidos` | autenticado | Seguimiento del pedido en curso e historial |
+| `/perfil` | autenticado | Claims de los tokens y pruebas 200/401 contra la API |
+| `/admin` | ADMIN | Gestión de pedidos (usa el BFF para los indicadores) |
+| `/admin/productos` | ADMIN | Mantenedor del catálogo |
+
 ## Estructura
 
 ```
@@ -104,7 +117,8 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `03-ec2.sh` | EC2 t3.small (Amazon Linux 2023 + Corretto 21) con Elastic IP |
 | `04-apigw.sh` | HTTP API con CORS, authorizer JWT de Cognito y una ruta por endpoint con su scope |
 | `05-deploy-backend.sh` | BD `pedidos`, variables de entorno en la EC2 y despliegue de los 3 servicios con systemd |
-| `06-deploy-frontend.sh` | Build de producción de React y publicación en Amplify |
+| `06-deploy-frontend.sh` | Build de producción de React y publicación en Amplify (`BRANCH=preview` publica un ambiente de revisión) |
+| `08-cognito-ui.sh` | Aplica logo y colores de Pedidos360 al Hosted UI de Cognito (`infra/cognito-ui/`) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
 | `smoke-test.sh` | Evidencia end-to-end: cada ruta sin token, con token alterado, como CLIENTE y como ADMIN |
 

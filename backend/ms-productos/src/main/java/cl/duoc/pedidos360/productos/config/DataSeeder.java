@@ -23,7 +23,7 @@ public class DataSeeder {
             repository.saveAll(List.of(
                     producto("Hamburguesa doble cheddar", "Dos carnes smash de 120 g, doble cheddar fundido, pepinillos y salsa de la casa en pan brioche.",
                             "Hamburguesas", "8990", "10990", 40, "hamburguesa-queso.jpg"),
-                    producto("Smash burger clasica", "Carne smash de 150 g con bordes crujientes, cheddar, pepinillos y cebolla morada.",
+                    producto("Smash burger clásica", "Carne smash de 150 g con bordes crujientes, cheddar, pepinillos y cebolla morada.",
                             "Hamburguesas", "6990", null, 50, "hamburguesa-smash.jpg"),
                     producto("Pizza pepperoni familiar", "Masa artesanal de 40 cm, salsa de tomate, mozzarella y abundante pepperoni.",
                             "Pizzas", "12990", "15990", 25, "pizza-familiar.jpg"),

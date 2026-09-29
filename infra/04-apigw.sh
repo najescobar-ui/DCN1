@@ -11,7 +11,7 @@ if [ -z "${API_ID:-}" ]; then
 fi
 # Only the frontend origins, only the methods/headers the SPA uses, no credentials (Bearer header, not cookies).
 aws apigatewayv2 update-api --api-id "$API_ID" --cors-configuration \
-  "AllowOrigins=$FRONTEND_URL,http://localhost:4200,AllowMethods=GET,POST,PUT,PATCH,DELETE,AllowHeaders=authorization,content-type,MaxAge=3600,AllowCredentials=false" >/dev/null
+  "AllowOrigins=$FRONTEND_URL,https://preview.$AMPLIFY_APP_ID.amplifyapp.com,http://localhost:4200,AllowMethods=GET,POST,PUT,PATCH,DELETE,AllowHeaders=authorization,content-type,MaxAge=3600,AllowCredentials=false" >/dev/null
 save API_URL "https://$API_ID.execute-api.$AWS_REGION.amazonaws.com"
 echo "API_URL=$API_URL"
 

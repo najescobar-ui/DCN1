@@ -46,23 +46,29 @@ aws cognito-idp create-resource-server --user-pool-id "$USER_POOL_ID" --identifi
 
 log "App client (public SPA, Authorization Code + PKCE)"
 SCOPES="openid email profile pedidos360/productos.read pedidos360/productos.write pedidos360/pedidos.read pedidos360/pedidos.write"
+PREVIEW_URL="https://preview.$AMPLIFY_APP_ID.amplifyapp.com"
+# Full client settings: update-user-pool-client resets any field that is not passed.
+CLIENT_SETTINGS=(
+  --allowed-o-auth-flows code
+  --allowed-o-auth-flows-user-pool-client
+  --allowed-o-auth-scopes $SCOPES
+  --supported-identity-providers COGNITO
+  --callback-urls "http://localhost:4200/callback" "$FRONTEND_URL/callback" "$PREVIEW_URL/callback"
+  --logout-urls "http://localhost:4200" "$FRONTEND_URL" "$PREVIEW_URL"
+  --explicit-auth-flows ALLOW_USER_SRP_AUTH ALLOW_REFRESH_TOKEN_AUTH ALLOW_USER_PASSWORD_AUTH
+  --access-token-validity 60 --id-token-validity 60 --refresh-token-validity 1
+  --token-validity-units AccessToken=minutes,IdToken=minutes,RefreshToken=days
+  --prevent-user-existence-errors ENABLED
+  --enable-token-revocation
+)
 if [ -z "${COGNITO_CLIENT_ID:-}" ]; then
   COGNITO_CLIENT_ID=$(aws cognito-idp create-user-pool-client --user-pool-id "$USER_POOL_ID" \
-    --client-name $PROJECT-spa \
-    --no-generate-secret \
-    --allowed-o-auth-flows code \
-    --allowed-o-auth-flows-user-pool-client \
-    --allowed-o-auth-scopes $SCOPES \
-    --supported-identity-providers COGNITO \
-    --callback-urls "http://localhost:4200/callback" "$FRONTEND_URL/callback" \
-    --logout-urls "http://localhost:4200" "$FRONTEND_URL" \
-    --explicit-auth-flows ALLOW_USER_SRP_AUTH ALLOW_REFRESH_TOKEN_AUTH ALLOW_USER_PASSWORD_AUTH \
-    --access-token-validity 60 --id-token-validity 60 --refresh-token-validity 1 \
-    --token-validity-units AccessToken=minutes,IdToken=minutes,RefreshToken=days \
-    --prevent-user-existence-errors ENABLED \
-    --enable-token-revocation \
+    --client-name $PROJECT-spa --no-generate-secret "${CLIENT_SETTINGS[@]}" \
     --query UserPoolClient.ClientId --output text)
   save COGNITO_CLIENT_ID "$COGNITO_CLIENT_ID"
+else
+  aws cognito-idp update-user-pool-client --user-pool-id "$USER_POOL_ID" --client-id "$COGNITO_CLIENT_ID" \
+    --client-name $PROJECT-spa "${CLIENT_SETTINGS[@]}" >/dev/null
 fi
 echo "COGNITO_CLIENT_ID=$COGNITO_CLIENT_ID"
 

@@ -2,8 +2,11 @@ export interface Producto {
   id: number
   nombre: string
   descripcion?: string
+  categoria?: string
   precio: number
+  precioAnterior?: number | null
   stock: number
+  imagenUrl?: string | null
   creadoEn?: string
 }
 
@@ -11,6 +14,17 @@ export type ProductoRequest = Omit<Producto, 'id' | 'creadoEn'>
 
 export const ESTADOS = ['PENDIENTE', 'CONFIRMADO', 'DESPACHADO', 'ENTREGADO', 'CANCELADO'] as const
 export type EstadoPedido = (typeof ESTADOS)[number]
+
+/** Customer-facing names for the backend order states. */
+export const ESTADO_LABEL: Record<EstadoPedido, string> = {
+  PENDIENTE: 'Recibido',
+  CONFIRMADO: 'En preparación',
+  DESPACHADO: 'En camino',
+  ENTREGADO: 'Entregado',
+  CANCELADO: 'Cancelado',
+}
+
+export const codigoPedido = (id: number) => `#P360-${String(id).padStart(5, '0')}`
 
 export interface ItemPedido {
   productoId: number

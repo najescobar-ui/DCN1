@@ -45,24 +45,26 @@ export function PerfilPage() {
   const alterado = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A')
 
   return (
-    <>
-      <h1>Mi sesion y tokens</h1>
-      <section className="grid">
-        <div className="card">
-          <h2>Lo que valida el backend</h2>
+    <div className="container page">
+      <h1 className="d page-title">Mi sesión y tokens</h1>
+      <section className="two-cols">
+        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 className="d" style={{ fontSize: 24 }}>
+            Lo que valida el backend
+          </h2>
           {me ? (
             <>
-              <p>
-                <strong>{me.username}</strong> <span className="muted">({me.sub})</span>
+              <p style={{ margin: 0 }}>
+                <strong>{me.username}</strong> <span className="m faint" style={{ fontSize: 12 }}>({me.sub})</span>
               </p>
-              <p className="muted">
-                Emisor: {me.issuer}
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+                Emisor: <span className="m">{me.issuer}</span>
                 <br />
-                Client ID: {me.clientId}
+                Client ID: <span className="m">{me.clientId}</span>
               </p>
               <div>
                 {me.roles.map((role) => (
-                  <span className="chip" key={role}>
+                  <span className="role-tag" key={role} style={{ marginRight: 6 }}>
                     ROLE {role}
                   </span>
                 ))}
@@ -74,7 +76,7 @@ export function PerfilPage() {
                   </span>
                 ))}
               </div>
-              <p className="muted">
+              <p className="muted" style={{ margin: 0, fontSize: 14 }}>
                 Emitido {fecha(me.emitidoEn)} · expira {fecha(me.expiraEn)}
               </p>
             </>
@@ -83,45 +85,56 @@ export function PerfilPage() {
           )}
         </div>
 
-        <div className="card">
-          <h2>Probar la validacion del JWT</h2>
-          <p className="muted">
-            Llamadas directas a <code>/api/bff/me</code> sin pasar por el interceptor.
+        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 className="d" style={{ fontSize: 24 }}>
+            Probar la validación del JWT
+          </h2>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+            Llamadas directas a <code className="m">/api/bff/me</code> por API Gateway, sin pasar por el interceptor.
           </p>
-          <div className="actions">
-            <button className="btn small" type="button" onClick={() => llamar('Token valido', { Authorization: `Bearer ${token}` })}>
-              Con token valido
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" type="button" onClick={() => llamar('Token válido', { Authorization: `Bearer ${token}` })}>
+              Con token válido
             </button>
-            <button className="btn small secondary" type="button" onClick={() => llamar('Sin Authorization header', {})}>
+            <button className="btn btn-sm btn-ghost" type="button" onClick={() => llamar('Sin header Authorization', {})}>
               Sin token
             </button>
-            <button className="btn small danger" type="button" onClick={() => llamar('Token con firma alterada', { Authorization: `Bearer ${alterado}` })}>
+            <button className="btn btn-sm btn-danger" type="button" onClick={() => llamar('Token con firma alterada', { Authorization: `Bearer ${alterado}` })}>
               Token alterado
             </button>
           </div>
           {prueba && (
             <>
-              <p>
+              <p style={{ margin: 0 }}>
                 <strong>{prueba.titulo}</strong> → HTTP{' '}
-                <span className={prueba.status >= 400 ? 'error' : ''}>{prueba.status}</span>
+                <span className={`m ${prueba.status >= 400 || prueba.status === 0 ? 'status-err' : 'status-ok'}`}>{prueba.status}</span>
               </p>
-              <pre>{JSON.stringify(prueba.body, null, 2)}</pre>
+              <pre className="code">{JSON.stringify(prueba.body, null, 2)}</pre>
             </>
           )}
         </div>
       </section>
 
-      <section className="grid">
-        <div className="card">
-          <h2>Access token (claims)</h2>
-          <p className="muted">Expira: {session.claims?.exp ? fecha(session.claims.exp * 1000) : ''}</p>
-          <pre>{JSON.stringify(session.claims, null, 2)}</pre>
+      <section className="two-cols">
+        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 className="d" style={{ fontSize: 24 }}>
+            Access token
+          </h2>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+            Se envía como Bearer a API Gateway. Expira: {session.claims?.exp ? fecha(session.claims.exp * 1000) : ''}
+          </p>
+          <pre className="code">{JSON.stringify(session.claims, null, 2)}</pre>
         </div>
-        <div className="card">
-          <h2>ID token (claims)</h2>
-          <pre>{JSON.stringify(session.idClaims, null, 2)}</pre>
+        <div className="card card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 className="d" style={{ fontSize: 24 }}>
+            ID token
+          </h2>
+          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
+            Identifica al usuario ante el frontend (OpenID Connect).
+          </p>
+          <pre className="code">{JSON.stringify(session.idClaims, null, 2)}</pre>
         </div>
       </section>
-    </>
+    </div>
   )
 }

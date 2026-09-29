@@ -4,6 +4,7 @@ import { AuthProvider } from 'react-oidc-context'
 import { BrowserRouter } from 'react-router'
 import App from './App'
 import { userManager } from './auth/oidc'
+import { CartProvider } from './cart/CartContext'
 import './index.css'
 
 /** Removes ?code=&state= from the URL once the callback has been processed. */
@@ -12,9 +13,11 @@ const onSigninCallback = () => window.history.replaceState({}, document.title, w
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider userManager={userManager} onSigninCallback={onSigninCallback}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <CartProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </CartProvider>
     </AuthProvider>
   </StrictMode>,
 )

@@ -20,8 +20,8 @@ export function useSession() {
     scopes: scopesFrom(claims),
     isAdmin: roles.includes('ADMIN'),
     username: claims?.username ?? '',
-    login: (returnTo = '/dashboard') => auth.signinRedirect({ state: { returnTo } }),
-    register: () => signupManager.signinRedirect({ state: { returnTo: '/dashboard' } }),
+    login: (returnTo?: string) => auth.signinRedirect({ state: { returnTo } }),
+    register: () => signupManager.signinRedirect(),
     logout: async () => {
       await auth.removeUser()
       window.location.assign(cognitoLogoutUrl())
