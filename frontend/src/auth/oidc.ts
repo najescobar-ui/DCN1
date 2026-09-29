@@ -36,6 +36,18 @@ export const signupManager = new UserManager({
   },
 })
 
+/** Random value for the OIDC nonce (32 bytes, hex). */
+export function nuevoNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Arguments for every authorize request. oidc-client-ts only sends a nonce when one is given;
+ * with it, the library checks that the ID token carries the same nonce (replay protection).
+ */
+export const signinArgs = (returnTo?: string) => ({ state: { returnTo }, nonce: nuevoNonce() })
+
 /**
  * Set while signing out, so route guards do not start a new login in the moment between
  * clearing the local session and leaving for Cognito's /logout.

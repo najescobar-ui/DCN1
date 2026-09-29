@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { useAuth } from 'react-oidc-context'
 import { Navigate, useLocation } from 'react-router'
-import { isSigningOut } from './oidc'
+import { isSigningOut, signinArgs } from './oidc'
 import { useSession } from './useSession'
 
 interface Props {
@@ -20,7 +20,7 @@ export function ProtectedRoute({ roles, children }: Props) {
 
   useEffect(() => {
     if (mustLogin) {
-      void auth.signinRedirect({ state: { returnTo: location.pathname } })
+      void auth.signinRedirect(signinArgs(location.pathname))
     }
   }, [mustLogin, auth, location.pathname])
 
