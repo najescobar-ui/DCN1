@@ -2008,3 +2008,12 @@ h3 {
     align-items: flex-start !important;
   }
 }
+
+.address-note {
+  padding: 10px 12px;
+  border-left: 3px solid var(--primary);
+  background: var(--surface-2);
+  border-radius: 2px;
+  font-size: 13px;
+  color: var(--text);
+}

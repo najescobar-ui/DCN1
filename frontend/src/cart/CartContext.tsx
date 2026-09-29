@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useSession } from '../auth/useSession'
 import { CartContext, type CartApi, type CartState } from './cartStore'
 
-const EMPTY: CartState = { items: [], direccion: '', lat: null, lon: null, telefono: '' }
+const EMPTY: CartState = { items: [], direccion: '', lat: null, lon: null, telefono: '', detalle: '' }
 const MAX_QTY = 99
 
 function load(key: string): CartState {
@@ -66,6 +66,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       clear: () => update((c) => ({ ...c, items: [] })),
       setEntrega: ({ direccion, lat, lon }) => update((c) => ({ ...c, direccion, lat, lon })),
       setTelefono: (telefono) => update((c) => ({ ...c, telefono })),
+      setDetalle: (detalle) => update((c) => ({ ...c, detalle })),
     }),
     [cart, update],
   )
