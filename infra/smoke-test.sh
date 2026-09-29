@@ -53,7 +53,12 @@ check 303 publico GET    "/api/pagos/webpay/retorno?token_ws=token-inexistente" 
 echo; echo "--- ADMIN"
 check 200 admin GET    /api/pedidos "$ADMIN"
 check 200 admin PATCH  "/api/pedidos/$PEDIDO_ID/estado" "$ADMIN" '{"estado":"CONFIRMADO"}'
-check 201 admin POST   /api/productos "$ADMIN" '{"nombre":"Empanada de pino","descripcion":"Horneada","categoria":"Empanadas","precio":2500,"stock":30}'
+NUEVO_PRODUCTO=$(curl -s -o /tmp/pedidos360-body -w '%{http_code}' -X POST "$API_URL/api/productos" -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+  -d '{"nombre":"Empanada de pino","descripcion":"Horneada","categoria":"Empanadas","precio":2500,"stock":30}')
+echo "$([ "$NUEVO_PRODUCTO" = 201 ] && echo OK || echo XX) $NUEVO_PRODUCTO (esperado 201) admin     POST    /api/productos                   $(head -c 110 /tmp/pedidos360-body)"
+[ "$NUEVO_PRODUCTO" = 201 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
+EMPANADA_ID=$(python3 -c 'import json;print(json.load(open("/tmp/pedidos360-body"))["id"])')
+check 204 admin DELETE "/api/productos/$EMPANADA_ID" "$ADMIN"
 check 200 admin PUT    /api/productos/8 "$ADMIN" '{"nombre":"Brownie con helado","descripcion":"Brownie tibio con helado de vainilla","categoria":"Postres","precio":3990,"stock":35,"imagenUrl":"/img/productos/brownie.jpg"}'
 check 404 admin GET    /api/productos/9999 "$ADMIN"
 
