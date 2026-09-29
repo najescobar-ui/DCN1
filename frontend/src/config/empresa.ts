@@ -1,6 +1,6 @@
 /**
  * Company contact and payment data shown in the store.
- * Company, bank and social data are FICTITIOUS demo values;the WhatsApp link opens the share screen (no number).
+ * Company, bank and social data are FICTITIOUS demo values.
  */
 export const EMPRESA = {
   nombre: 'Pedidos360 SpA',
@@ -9,7 +9,10 @@ export const EMPRESA = {
   banco: 'Banco de Chile',
   tipoCuenta: 'Cuenta Corriente',
   numeroCuenta: '00-360-36036-00',
-  /** WhatsApp in international format without "+", used for wa.me links. */
+  /**
+   * Business WhatsApp in international format without "+". Empty in this demo: the links then open
+   * WhatsApp's share screen with the message ready, and the user picks the recipient.
+   */
   whatsapp: '',
   redes: {
     instagram: 'https://www.instagram.com/',
