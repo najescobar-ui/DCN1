@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../../api/api'
-import { ESTADOS, ESTADO_LABEL, codigoPedido, type EstadoPago, type EstadoPedido, type Pedido, type Resumen } from '../../api/models'
+import { ESTADOS, ESTADO_LABEL, SIGUIENTES, codigoPedido, type EstadoPago, type EstadoPedido, type Pedido, type Resumen } from '../../api/models'
 import { SearchIcon, ShieldIcon } from '../../components/icons'
 import { clp, fecha } from '../../utils/format'
 import { PagoBadge } from '../PedidosPage'
@@ -153,9 +153,11 @@ export function AdminPedidosPage() {
                       className="select"
                       style={{ minWidth: 160 }}
                       value={p.estado}
+                      disabled={SIGUIENTES[p.estado].length === 0}
                       onChange={(e) => cambiarEstado(p, e.target.value as EstadoPedido)}
                     >
-                      {ESTADOS.map((e) => (
+                      {/* Solo el estado actual y los siguientes válidos: el pedido no retrocede ni se salta pasos. */}
+                      {[p.estado, ...SIGUIENTES[p.estado]].map((e) => (
                         <option key={e} value={e}>
                           {ESTADO_LABEL[e]}
                         </option>
