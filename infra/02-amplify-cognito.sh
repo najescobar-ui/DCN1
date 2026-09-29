@@ -56,7 +56,7 @@ CLIENT_SETTINGS=(
   --supported-identity-providers COGNITO
   --callback-urls "http://localhost:4200/callback" "$FRONTEND_URL/callback" "$PREVIEW_URL/callback"
   --logout-urls "http://localhost:4200" "$FRONTEND_URL" "$PREVIEW_URL"
-  --explicit-auth-flows ALLOW_USER_SRP_AUTH ALLOW_REFRESH_TOKEN_AUTH ALLOW_USER_PASSWORD_AUTH
+  --explicit-auth-flows ALLOW_USER_SRP_AUTH ALLOW_REFRESH_TOKEN_AUTH
   --access-token-validity "${ACCESS_TOKEN_MINUTES:-60}" --id-token-validity "${ACCESS_TOKEN_MINUTES:-60}" --refresh-token-validity 1
   --token-validity-units AccessToken=minutes,IdToken=minutes,RefreshToken=days
   --prevent-user-existence-errors ENABLED
