@@ -1,7 +1,7 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import { buscarDirecciones, direccionEn, type Lugar } from '../utils/geocoding'
+import { buscarDirecciones, combinarDireccion, direccionEn, ordenarPorNumero, type Lugar } from '../utils/geocoding'
 import { PinIcon, SearchIcon } from './icons'
 
 interface Props {
@@ -22,6 +22,9 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
   const [buscando, setBuscando] = useState(false)
   // Last address chosen from the list or the map; typing that exact text again does not search.
   const [seleccion, setSeleccion] = useState(direccion)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const textoRef = useRef(texto)
+  textoRef.current = texto
   const mapEl = useRef<HTMLDivElement>(null)
   const map = useRef<L.Map | null>(null)
   const marker = useRef<L.Marker | null>(null)
@@ -42,13 +45,18 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
     }).addTo(m)
     const mk = L.marker(lat != null && lon != null ? [lat, lon] : SANTIAGO, { draggable: true, icon: pinIcon })
     if (lat != null) mk.addTo(m)
+    // Dragging only adjusts the point on the map; the address the user typed is kept.
     mk.on('dragend', async () => {
       const { lat: la, lng: lo } = mk.getLatLng()
-      const lugar = await direccionEn(la, lo).catch(() => null)
-      const nueva = lugar?.etiqueta ?? `${la.toFixed(5)}, ${lo.toFixed(5)}`
-      setTexto(nueva)
-      setSeleccion(nueva)
-      onChangeRef.current({ direccion: nueva, lat: la, lon: lo })
+      let actual = textoRef.current.trim()
+      if (!actual) {
+        const lugar = await direccionEn(la, lo).catch(() => null)
+        actual = lugar?.etiqueta ?? `${la.toFixed(5)}, ${lo.toFixed(5)}`
+        setTexto(actual)
+        setSeleccion(actual)
+      }
+      setAviso(null)
+      onChangeRef.current({ direccion: actual, lat: la, lon: lo })
     })
     map.current = m
     marker.current = mk
@@ -70,7 +78,7 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
     const timer = setTimeout(async () => {
       setBuscando(true)
       try {
-        setSugerencias(await buscarDirecciones(q, ctrl.signal))
+        setSugerencias(ordenarPorNumero(await buscarDirecciones(q, ctrl.signal), q))
         setAbierto(true)
       } catch {
         // Aborted or offline: keep the typed text.
@@ -84,12 +92,18 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
     }
   }, [texto, seleccion])
 
-  const ubicar = (lugar: Lugar) => {
-    setTexto(lugar.etiqueta)
-    setSeleccion(lugar.etiqueta)
+  const ubicar = (lugar: Lugar, escrito = texto) => {
+    const { direccion: final, exacta } = combinarDireccion(escrito, lugar)
+    setTexto(final)
+    setSeleccion(final)
     setSugerencias([])
     setAbierto(false)
-    onChange({ direccion: lugar.etiqueta, lat: lugar.lat, lon: lugar.lon })
+    setAviso(
+      exacta
+        ? null
+        : 'El mapa no tiene ese número exacto: dejamos tu dirección tal como la escribiste y ubicamos la calle. Arrastra el pin a tu puerta si hace falta.',
+    )
+    onChange({ direccion: final, lat: lugar.lat, lon: lugar.lon })
     if (map.current && marker.current) {
       marker.current.setLatLng([lugar.lat, lugar.lon]).addTo(map.current)
       map.current.setView([lugar.lat, lugar.lon], 16)
@@ -99,7 +113,7 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
   const miUbicacion = () => {
     navigator.geolocation?.getCurrentPosition(async ({ coords }) => {
       const lugar = await direccionEn(coords.latitude, coords.longitude).catch(() => null)
-      ubicar(lugar ?? { etiqueta: `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`, lat: coords.latitude, lon: coords.longitude })
+      ubicar(lugar ?? { etiqueta: `${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`, lat: coords.latitude, lon: coords.longitude }, '')
     })
   }
 
@@ -146,9 +160,15 @@ export function AddressPicker({ direccion, lat, lon, onChange }: Props) {
           Usar mi ubicación
         </button>
       </div>
-      <span className="faint" style={{ fontSize: 12 }}>
-        {lat != null ? 'Puedes arrastrar el pin para ajustar el punto exacto.' : 'Elige una sugerencia para ubicarla en el mapa.'}
-      </span>
+      {aviso ? (
+        <span className="address-note">{aviso}</span>
+      ) : (
+        <span className="faint" style={{ fontSize: 12 }}>
+          {lat != null
+            ? 'Puedes arrastrar el pin para ajustar el punto exacto; tu dirección escrita no cambia.'
+            : 'Escribe tu calle y número, y elige una sugerencia para ubicarla en el mapa.'}
+        </span>
+      )}
     </div>
   )
 }

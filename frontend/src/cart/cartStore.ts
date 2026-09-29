@@ -21,6 +21,8 @@ export interface CartState {
   lat: number | null
   lon: number | null
   telefono: string
+  /** Apartment, house or reference, appended to the address. */
+  detalle: string
 }
 
 export interface CartApi extends CartState {
@@ -32,6 +34,7 @@ export interface CartApi extends CartState {
   clear: () => void
   setEntrega: (entrega: Entrega) => void
   setTelefono: (telefono: string) => void
+  setDetalle: (detalle: string) => void
 }
 
 export const CartContext = createContext<CartApi | null>(null)
