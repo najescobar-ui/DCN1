@@ -1,0 +1,23 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: bff
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+  # Internal URLs of the microservices (same EC2 host in AWS).
+  productos-url: ${PRODUCTOS_URL:http://localhost:8081}
+  pedidos-url: ${PEDIDOS_URL:http://localhost:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
