@@ -1,0 +1,29 @@
+<header class="topbar">
+  <a routerLink="/" class="brand">Pedidos<span>360</span></a>
+  @if (auth.isAuthenticated()) {
+    <nav>
+      <a routerLink="/dashboard" routerLinkActive="active">Inicio</a>
+      <a routerLink="/productos" routerLinkActive="active">Productos</a>
+      <a routerLink="/pedidos" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Pedidos</a>
+      <a routerLink="/pedidos/nuevo" routerLinkActive="active">Nuevo pedido</a>
+      <a routerLink="/perfil" routerLinkActive="active">Mi token</a>
+    </nav>
+    <div class="user">
+      <span>{{ auth.username() }} · {{ auth.roles().join(', ') }}</span>
+      <button class="btn small secondary" type="button" (click)="auth.logout()">Cerrar sesion</button>
+    </div>
+  } @else {
+    <div class="user">
+      <button class="btn small secondary" type="button" (click)="auth.register()">Crear cuenta</button>
+      <button class="btn small" type="button" (click)="auth.login()">Iniciar sesion</button>
+    </div>
+  }
+</header>
+
+@if (notifications.current(); as n) {
+  <div class="toast" [class.error]="n.kind === 'error'" role="status" (click)="notifications.clear()">{{ n.text }}</div>
+}
+
+<main>
+  <router-outlet />
+</main>

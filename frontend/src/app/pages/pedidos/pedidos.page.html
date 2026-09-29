@@ -1,0 +1,45 @@
+<div class="actions" style="justify-content: space-between">
+  <h1>{{ auth.isAdmin() ? 'Todos los pedidos' : 'Mis pedidos' }}</h1>
+  <a class="btn" routerLink="/pedidos/nuevo">Nuevo pedido</a>
+</div>
+
+@for (p of pedidos(); track p.id) {
+  <div class="card">
+    <div class="actions" style="justify-content: space-between">
+      <div class="actions">
+        <strong>Pedido #{{ p.id }}</strong>
+        <span class="badge {{ p.estado }}">{{ p.estado }}</span>
+        <span class="muted">{{ p.creadoEn | date: 'medium' }}</span>
+        @if (auth.isAdmin()) {
+          <span class="muted">· {{ p.clienteUsername || p.clienteId }}</span>
+        }
+      </div>
+      <div class="actions">
+        @if (auth.isAdmin()) {
+          <select [value]="p.estado" (change)="cambiarEstado(p, $any($event.target).value)" aria-label="Estado">
+            @for (e of estados; track e) {
+              <option [value]="e">{{ e }}</option>
+            }
+          </select>
+        } @else if (p.estado === 'PENDIENTE') {
+          <button class="btn small danger" type="button" (click)="cancelar(p)">Cancelar</button>
+        }
+      </div>
+    </div>
+    <table>
+      @for (i of p.items; track i.productoId) {
+        <tr>
+          <td>{{ i.nombreProducto }}</td>
+          <td>{{ i.cantidad }} x {{ i.precioUnitario | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+          <td>{{ i.subtotal | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</td>
+        </tr>
+      }
+    </table>
+    <div class="actions" style="justify-content: space-between; margin-top: 8px">
+      <span class="muted">{{ p.direccionEntrega }}</span>
+      <strong>Total {{ p.total | currency: 'CLP' : 'symbol-narrow' : '1.0-0' }}</strong>
+    </div>
+  </div>
+} @empty {
+  <p class="muted">No hay pedidos todavia.</p>
+}
