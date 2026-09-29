@@ -1,0 +1,11 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+
+# Secrets and local environment (never commit)
+.env
+*.env
+!*.env.example
+*.pem
