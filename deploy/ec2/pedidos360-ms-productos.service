@@ -1,0 +1,17 @@
+[Unit]
+Description=Pedidos360 ms-productos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ec2-user
+WorkingDirectory=/opt/pedidos360
+EnvironmentFile=/opt/pedidos360/pedidos360.env
+Environment=PORT=8081
+ExecStart=/usr/bin/java -Xms128m -Xmx256m -jar /opt/pedidos360/ms-productos.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
