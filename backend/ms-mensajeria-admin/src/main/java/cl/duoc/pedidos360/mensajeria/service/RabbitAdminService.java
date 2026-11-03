@@ -125,8 +125,9 @@ public class RabbitAdminService {
     }
 
     /**
-     * Elimina una cola. Las colas del sistema están protegidas. Con soloSiVacia=true RabbitMQ rechaza
-     * la operación si quedan mensajes, para no perderlos por accidente.
+     * Elimina una cola. Las colas del sistema están protegidas. Con soloSiVacia=true se rechaza si quedan
+     * mensajes, para no perderlos por accidente. La revisión se hace aquí porque las colas quorum no
+     * admiten el flag if-empty del protocolo.
      */
     public void eliminarCola(String nombre, boolean soloSiVacia) {
         exigirNoProtegido(nombre, "la cola");
@@ -135,7 +136,7 @@ public class RabbitAdminService {
             throw new OperacionRechazadaException(
                     "La cola " + nombre + " tiene " + cola.mensajes() + " mensajes; vacíala o usa soloSiVacia=false");
         }
-        declarar(() -> admin.deleteQueue(nombre, false, soloSiVacia));
+        declarar(() -> admin.deleteQueue(nombre));
         log.info("Cola eliminada: {}", nombre);
     }
 
@@ -156,10 +157,11 @@ public class RabbitAdminService {
         if (!nombre.endsWith(props.sufijoDlq())) {
             throw new OperacionRechazadaException("Solo se reprocesan colas " + props.sufijoDlq());
         }
-        obtenerCola(nombre);
+        // Solo los mensajes que había al empezar: si uno vuelve a fallar y regresa a la DLQ, no se toma de nuevo.
+        long pendientes = Math.min(obtenerCola(nombre).listos(), props.maxReproceso());
         int[] conteo = new int[2];
         template.execute(canal -> {
-            for (int i = 0; i < props.maxReproceso(); i++) {
+            for (int i = 0; i < pendientes; i++) {
                 GetResponse r = canal.basicGet(nombre, false);
                 if (r == null) {
                     break;
@@ -171,8 +173,10 @@ public class RabbitAdminService {
                     break;
                 }
                 Map<String, Object> headers = new HashMap<>(r.getProps().getHeaders());
+                // Se limpia el historial de rechazos y los headers de la demostración (el fallo simulado
+                // representa una caída que ya se resolvió).
                 headers.keySet().removeIf(h -> h.startsWith("x-death") || h.startsWith("x-first-death")
-                        || h.startsWith("x-last-death"));
+                        || h.startsWith("x-last-death") || props.headersDemo().contains(h));
                 AMQP.BasicProperties propiedades = r.getProps().builder().headers(headers).build();
                 // Exchange por defecto + nombre de cola: llega solo a la cola original, no a todas las del topic.
                 canal.basicPublish("", colaOrigen, propiedades, r.getBody());

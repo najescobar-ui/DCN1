@@ -40,6 +40,9 @@ mensajeria:
     prefijo-reservado: amq.
     # Máximo de mensajes que mueve una operación de reproceso de DLQ.
     max-reproceso: 500
+    # Headers de demostración (ver ms-notificaciones) que se quitan al reprocesar una DLQ.
+    headers-demo:
+      - x-simular-fallo
 
 management:
   endpoints:

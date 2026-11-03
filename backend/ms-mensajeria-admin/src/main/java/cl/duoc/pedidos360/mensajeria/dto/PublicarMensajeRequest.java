@@ -16,8 +16,8 @@ import jakarta.validation.constraints.Size;
  * @param headers    headers opcionales (por ejemplo x-simular-fallo para la demostración de reintentos)
  */
 public record PublicarMensajeRequest(
-        @NotBlank @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String exchange,
-        @NotNull @Pattern(regexp = Nombres.PATRON_ROUTING_KEY, message = Nombres.MENSAJE_ROUTING_KEY) String routingKey,
+        @NotBlank(message = "es obligatorio") @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String exchange,
+        @NotNull(message = "es obligatorio (puede ser vacío)") @Pattern(regexp = Nombres.PATRON_ROUTING_KEY, message = Nombres.MENSAJE_ROUTING_KEY) String routingKey,
         @NotNull(message = "es obligatorio") @Size(max = 10_000, message = "no puede superar 10.000 caracteres") String cuerpo,
         @Size(max = 10, message = "admite hasta 10 headers") Map<@Pattern(regexp = "^[A-Za-z0-9-]{1,50}$", message = "nombre de header inválido") String, @Size(max = 200) String> headers) {
 }

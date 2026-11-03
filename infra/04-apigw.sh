@@ -33,21 +33,24 @@ else
 fi
 
 log "Integrations (one per microservice, original path forwarded)"
-integration() {  # name port
-  local var="INTEG_$1"
+integration() {  # name port [host]
+  local var="INTEG_$1" host=${3:-$EC2_IP}
   if [ -z "${!var:-}" ]; then
     local id
     id=$(aws apigatewayv2 create-integration --api-id "$API_ID" --integration-type HTTP_PROXY \
-      --integration-method ANY --integration-uri "http://$EC2_IP:$2" \
+      --integration-method ANY --integration-uri "http://$host:$2" \
       --payload-format-version 1.0 --timeout-in-millis 15000 \
       --request-parameters 'overwrite:path=$request.path' \
-      --description "$1 on EC2 :$2" --query IntegrationId --output text)
+      --description "$1 on $host:$2" --query IntegrationId --output text)
     save "$var" "$id"
   fi
 }
 integration bff 8080
 integration productos 8081
 integration pedidos 8082
+# Microservicios de mensajería, en la EC2 de RabbitMQ (docker compose).
+integration notificaciones 8084 "$MQ_IP"
+integration mensajeria 8083 "$MQ_IP"
 
 log "Routes"
 EXISTING=$(aws apigatewayv2 get-routes --api-id "$API_ID" --query 'Items[].RouteKey' --output text)
@@ -79,6 +82,27 @@ route "PATCH /api/pedidos/{id}/estado"    pedidos   "pedidos360/pedidos.write"
 route "POST /api/pedidos/{id}/cancelar"   pedidos   "pedidos360/pedidos.write"
 route "PATCH /api/pedidos/{id}/pago"      pedidos   "pedidos360/pedidos.write"
 route "POST /api/pedidos/{id}/pago/webpay" pedidos  "pedidos360/pedidos.write"
+# Lo que generan los consumidores de RabbitMQ (el CLIENTE ve lo suyo, el ADMIN todo; auditoría solo ADMIN).
+route "GET /api/notificaciones"           notificaciones "pedidos360/pedidos.read"
+route "GET /api/comprobantes"             notificaciones "pedidos360/pedidos.read"
+route "GET /api/auditoria"                notificaciones "pedidos360/pedidos.read"
+# Administración de RabbitMQ: además del scope, ms-mensajeria-admin exige el grupo ADMIN.
+MQ_SCOPE="pedidos360/mensajeria.admin"
+route "GET /api/mensajeria/cluster"                     mensajeria "$MQ_SCOPE"
+route "GET /api/mensajeria/queues"                      mensajeria "$MQ_SCOPE"
+route "POST /api/mensajeria/queues"                     mensajeria "$MQ_SCOPE"
+route "GET /api/mensajeria/queues/{nombre}"             mensajeria "$MQ_SCOPE"
+route "DELETE /api/mensajeria/queues/{nombre}"          mensajeria "$MQ_SCOPE"
+route "DELETE /api/mensajeria/queues/{nombre}/messages" mensajeria "$MQ_SCOPE"
+route "POST /api/mensajeria/queues/{nombre}/reprocess"  mensajeria "$MQ_SCOPE"
+route "GET /api/mensajeria/exchanges"                   mensajeria "$MQ_SCOPE"
+route "POST /api/mensajeria/exchanges"                  mensajeria "$MQ_SCOPE"
+route "GET /api/mensajeria/exchanges/{nombre}"          mensajeria "$MQ_SCOPE"
+route "DELETE /api/mensajeria/exchanges/{nombre}"       mensajeria "$MQ_SCOPE"
+route "GET /api/mensajeria/bindings"                    mensajeria "$MQ_SCOPE"
+route "POST /api/mensajeria/bindings"                   mensajeria "$MQ_SCOPE"
+route "DELETE /api/mensajeria/bindings"                 mensajeria "$MQ_SCOPE"
+route "POST /api/mensajeria/messages"                   mensajeria "$MQ_SCOPE"
 # Webpay sends the customer's browser back here (GET or form POST) without a bearer token;
 # ms-pedidos validates the transaction token directly with Transbank.
 route "GET /api/pagos/webpay/retorno"     pedidos   PUBLIC

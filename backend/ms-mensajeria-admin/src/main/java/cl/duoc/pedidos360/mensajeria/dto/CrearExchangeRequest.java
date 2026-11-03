@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Pattern;
  * @param durable si sobrevive a un reinicio del broker (por defecto true)
  */
 public record CrearExchangeRequest(
-        @NotBlank @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String nombre,
+        @NotBlank(message = "es obligatorio") @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String nombre,
         @NotNull(message = "es obligatorio (DIRECT, TOPIC, FANOUT o HEADERS)") TipoExchange tipo,
         Boolean durable) {
 

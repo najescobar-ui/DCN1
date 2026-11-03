@@ -12,7 +12,7 @@ import jakarta.validation.constraints.Pattern;
  * @param routingKey clave o patrón; vacío es válido (fanout)
  */
 public record BindingRequest(
-        @NotBlank @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String exchange,
-        @NotBlank @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String cola,
+        @NotBlank(message = "es obligatorio") @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String exchange,
+        @NotBlank(message = "es obligatorio") @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String cola,
         @NotNull(message = "es obligatorio (puede ser vacío)") @Pattern(regexp = Nombres.PATRON_ROUTING_KEY, message = Nombres.MENSAJE_ROUTING_KEY) String routingKey) {
 }
