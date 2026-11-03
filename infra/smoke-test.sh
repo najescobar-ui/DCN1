@@ -77,4 +77,18 @@ check 204 admin DELETE "/api/productos/$EMPANADA_ID" "$ADMIN"
 check 200 admin PUT    /api/productos/8 "$ADMIN" '{"nombre":"Brownie con helado","descripcion":"Brownie tibio con helado de vainilla","categoria":"Postres","precio":3990,"stock":35,"imagenUrl":"/img/productos/brownie.jpg"}'
 check 404 admin GET    /api/productos/9999 "$ADMIN"
 
+log "Mensajería (RabbitMQ)"
+# El scope mensajeria.admin se pide aparte para no cambiar los tokens de las pruebas anteriores.
+MQ_ADMIN=$(SCOPE="openid email profile pedidos360/pedidos.read pedidos360/mensajeria.admin" "$INFRA_DIR/get-token.sh" admin "$ADMIN_PASSWORD")
+MQ_CLIENTE=$(SCOPE="openid email profile pedidos360/pedidos.read pedidos360/mensajeria.admin" "$INFRA_DIR/get-token.sh" cliente1 "$CLIENTE_PASSWORD")
+check 401 sin-token GET  /api/mensajeria/queues ""
+check 403 cliente   GET  /api/mensajeria/queues "$MQ_CLIENTE"
+check 403 admin     GET  /api/mensajeria/queues "$ADMIN"
+check 200 admin     GET  /api/mensajeria/cluster "$MQ_ADMIN"
+check 200 admin     GET  /api/mensajeria/queues/notificaciones.pedidos "$MQ_ADMIN"
+check 400 admin     POST /api/mensajeria/queues "$MQ_ADMIN" '{"nombre":"","tipo":"QUORUM"}'
+check 409 admin     DELETE /api/mensajeria/queues/notificaciones.pedidos "$MQ_ADMIN"
+check 200 cliente   GET  /api/notificaciones "$CLIENTE"
+check 200 admin     GET  /api/auditoria "$ADMIN"
+
 echo; echo "Resultado: $PASS OK, $FAIL con diferencias"

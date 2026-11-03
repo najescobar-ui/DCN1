@@ -1,6 +1,6 @@
 # Pedidos360
 
-Proyecto de **Desarrollo Cloud Native I (DSY1107)**. Sistema de pedidos de comida con frontend React publicado en AWS Amplify, autenticación con Amazon Cognito como IDaaS, Amazon API Gateway como API Manager y microservicios Spring Boot en EC2 con PostgreSQL en Amazon RDS.
+Proyecto de **Desarrollo Cloud Native I (DSY1107)**. Sistema de pedidos de comida con frontend React publicado en AWS Amplify, autenticación con Amazon Cognito como IDaaS, Amazon API Gateway como API Manager, microservicios Spring Boot en EC2 con PostgreSQL en Amazon RDS y mensajería asíncrona con un clúster RabbitMQ de dos nodos levantado con docker compose.
 
 | | |
 |---|---|
@@ -23,14 +23,46 @@ API Gateway (HTTP API) ── authorizer JWT: firma, iss, audience, exp y scope 
    │
    ├─ /api/bff/*        ──► bff           :8080 ─┐ token relay
    ├─ /api/productos/*  ──► ms-productos  :8081 ◄┤
-   └─ /api/pedidos/*    ──► ms-pedidos    :8082 ◄┘──► ms-productos (precios)
-                                │          └──► Transbank Webpay (pagos)
-                                └── RDS PostgreSQL (BD productos / BD pedidos)
+   ├─ /api/pedidos/*    ──► ms-pedidos    :8082 ◄┘──► ms-productos (precios)
+   │                            │   │      └──► Transbank Webpay (pagos)
+   │                            │   └── RDS PostgreSQL (BD productos / BD pedidos)
+   │                            │ publica eventos (AMQP, después del commit)
+   │                            ▼
+   │            ┌──── EC2 de mensajería · docker compose ─────────────────────────────┐
+   │            │  RabbitMQ rabbit1 ⇄ rabbit2 (clúster, colas quorum replicadas)      │
+   ├─ /api/notificaciones, /api/comprobantes, /api/auditoria                          │
+   │            │      ──► ms-notificaciones   :8084  consumidores ──► RDS (BD mensajeria)
+   └─ /api/mensajeria/* ──► ms-mensajeria-admin :8083  crea/elimina colas, exchanges, bindings
+                └─────────────────────────────────────────────────────────────────────┘
 ```
 
 Cada microservicio vuelve a validar el JWT aunque API Gateway ya lo haya hecho (defensa en profundidad): firma RS256 contra el JWKS de Cognito, vigencia, `iss`, `client_id`/`aud` y `token_use=access`. Los roles salen de `cognito:groups` y los scopes de `scope`.
 
 El detalle del login está en [`docs/flujo-login-pkce.png`](docs/flujo-login-pkce.png).
+
+## Mensajería (RabbitMQ)
+
+`ms-pedidos` publica un evento por cada hecho de negocio y otros servicios lo procesan sin que el cliente espere. El servicio de negocio no conoce RabbitMQ: emite un evento de Spring y `PublicadorEventosRabbit` lo envía **después del commit**. Si el broker no está disponible el error queda en el log y el pedido sigue su curso.
+
+| Exchange | Tipo | Routing key | Cola | Consumidor (dominio) |
+|---|---|---|---|---|
+| `pedidos.eventos` | topic | `pedido.#`, `pago.#` | `notificaciones.pedidos` | `consumer/notificaciones`: aviso al cliente |
+| `pedidos.comandos` | direct | `comprobante.generar` | `comprobantes.generar` | `consumer/comprobantes`: emite el comprobante de un pedido pagado |
+| `pedidos.eventos` | topic | `#` | `auditoria.eventos` | `consumer/auditoria`: bitácora de todos los eventos |
+| `pedidos.dlx` | direct | `<cola>.dlq` | `notificaciones.pedidos.dlq`, `comprobantes.generar.dlq`, `auditoria.eventos.dlq` | (se inspeccionan y reprocesan desde el administrador) |
+
+Routing keys publicadas: `pedido.creado`, `pedido.estado.<estado>` (confirmado, despachado, entregado, cancelado), `pago.aprobado`, `pago.rechazado` y el comando `comprobante.generar`.
+
+- **Nombres centralizados:** bloque `mensajeria:` de cada `application.yml`, leído por un `@ConfigurationProperties` (`MensajeriaProperties`). Ninguna clase escribe nombres de colas a mano.
+- **Configuración separada:** `RabbitConfig` declara los beans `Queue`, `Exchange` y `Binding` de cada caso de uso; los servicios de dominio no importan nada de AMQP.
+- **Colas quorum** (replicadas en los dos nodos), cada una con su DLQ a través del DLX.
+- **Confirmación manual** (`AcknowledgeMode.MANUAL`), en `ConfirmadorMensajes`:
+  - procesado bien → `basicAck`;
+  - mensaje inválido (JSON ilegible o sin datos obligatorios) → `basicNack(requeue=false)`: directo a la DLQ, no se reintenta;
+  - error recuperable → `basicNack(requeue=true)` hasta 3 intentos (contados con el header `x-delivery-count`) y después a la DLQ;
+  - cada decisión queda en el log con la cola, el intento y el motivo. Los consumidores son idempotentes (por `eventoId` o por pedido).
+- **Administrador** (`ms-mensajeria-admin`): API REST sobre `RabbitAdminService`, que usa `RabbitAdmin` para escribir y la API de management para leer contadores. Valida la entrada con DTO y Bean Validation (nombres, tipos, TTL, límites y combinaciones inválidas como `limiteEntregas` en una cola clásica) y protege la topología del sistema (409).
+- **Clúster:** `deploy/mensajeria/docker-compose.yml` levanta `rabbit1` y `rabbit2` con la misma cookie de Erlang y *peer discovery* clásico, más los dos microservicios de mensajería.
 
 ## Tecnologías
 
@@ -38,6 +70,7 @@ El detalle del login está en [`docs/flujo-login-pkce.png`](docs/flujo-login-pkc
 |---|---|
 | Backend | Java 21, Spring Boot 4.1.1 (Web MVC, Security OAuth2 Resource Server, Data JPA, Validation, Actuator), Maven |
 | Frontend | React 19, Vite 8, TypeScript, React Router, `react-oidc-context` + `oidc-client-ts`, axios, Leaflet |
+| Mensajería | RabbitMQ 4.1 (clúster de 2 nodos, colas quorum), Spring AMQP, Docker Compose |
 | Base de datos | PostgreSQL 18 en Amazon RDS (H2 en memoria para desarrollo y pruebas) |
 | Identidad | Amazon Cognito (user pool, grupos, resource server, Hosted UI, trigger Lambda en Python 3.12) |
 | API Manager | Amazon API Gateway, tipo HTTP API, con authorizer JWT |
@@ -63,7 +96,7 @@ El detalle del login está en [`docs/flujo-login-pkce.png`](docs/flujo-login-pkc
 
 Quien se registra desde el sitio queda en `CLIENTE` gracias al trigger *post confirmation* (`infra/lambda/post-confirmation`). Si un token no trae grupo, el backend lo trata como `CLIENTE`.
 
-Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `pedidos.read`, `pedidos.write`.
+Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `pedidos.read`, `pedidos.write` y `mensajeria.admin`. La administración de RabbitMQ exige el scope `mensajeria.admin` **y** el grupo ADMIN.
 
 ## Endpoints
 
@@ -84,6 +117,18 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 | PATCH | `/api/pedidos/{id}/pago` | ms-pedidos | pedidos.write | ADMIN (confirma transferencia o efectivo) |
 | POST | `/api/pedidos/{id}/pago/webpay` | ms-pedidos | pedidos.write | dueño (inicia el pago con tarjeta) |
 | GET, POST | `/api/pagos/webpay/retorno` | ms-pedidos | pública | retorno del navegador desde Webpay |
+| GET | `/api/notificaciones` | ms-notificaciones | pedidos.read | ADMIN: todas; CLIENTE: propias |
+| GET | `/api/comprobantes` | ms-notificaciones | pedidos.read | ADMIN: todos; CLIENTE: propios |
+| GET | `/api/auditoria` | ms-notificaciones | pedidos.read | ADMIN |
+| GET | `/api/mensajeria/cluster` | ms-mensajeria-admin | mensajeria.admin | ADMIN (nodos y versión) |
+| GET, POST | `/api/mensajeria/queues` | ms-mensajeria-admin | mensajeria.admin | ADMIN (listar con contadores / crear, opcionalmente con DLQ) |
+| GET, DELETE | `/api/mensajeria/queues/{nombre}` | ms-mensajeria-admin | mensajeria.admin | ADMIN (`?soloSiVacia=false` fuerza la eliminación) |
+| DELETE | `/api/mensajeria/queues/{nombre}/messages` | ms-mensajeria-admin | mensajeria.admin | ADMIN (purgar) |
+| POST | `/api/mensajeria/queues/{nombre}/reprocess` | ms-mensajeria-admin | mensajeria.admin | ADMIN (devuelve una DLQ a su cola de origen) |
+| GET, POST | `/api/mensajeria/exchanges` | ms-mensajeria-admin | mensajeria.admin | ADMIN |
+| GET, DELETE | `/api/mensajeria/exchanges/{nombre}` | ms-mensajeria-admin | mensajeria.admin | ADMIN |
+| GET, POST, DELETE | `/api/mensajeria/bindings` | ms-mensajeria-admin | mensajeria.admin | ADMIN (el DELETE recibe exchange, cola y routing key en el cuerpo) |
+| POST | `/api/mensajeria/messages` | ms-mensajeria-admin | mensajeria.admin | ADMIN (mensaje de prueba) |
 
 **Estados del pedido:** `PENDIENTE` (Recibido) → `CONFIRMADO` (En preparación) → `DESPACHADO` (En camino) → `ENTREGADO`. Solo se avanza al siguiente estado; se puede pasar a `CANCELADO` desde Recibido o En preparación. Cada cliente tiene como máximo **un pedido en curso**: puede hacer otro cuando se entregue o se cancele. El cliente puede cancelar mientras el pedido está Recibido y sin pagar. Un pedido en efectivo queda pagado al marcarse como entregado. Cualquier otro cambio responde 409.
 
@@ -110,6 +155,8 @@ Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol
 | `/perfil` | autenticado | Claims de los tokens y pruebas contra la API (token válido, sin token, token alterado) |
 | `/admin` | ADMIN | Gestión de pedidos y pagos (indicadores desde el BFF), tabla ordenable y paginada |
 | `/admin/productos` | ADMIN | Mantenedor del catálogo, tabla ordenable y paginada |
+| `/admin/mensajeria` | ADMIN | Clúster RabbitMQ: nodos, colas con contadores y DLQ, exchanges, bindings, pruebas de rutas (válido, inválido, fallo transitorio) y auditoría |
+| `/notificaciones` | autenticado | Avisos y comprobantes generados por los consumidores |
 
 ## Estructura
 
@@ -118,8 +165,11 @@ backend/
   ms-productos/   catálogo (JPA + PostgreSQL/H2)
   ms-pedidos/     pedidos y pagos; consulta precios a ms-productos reenviando el token
   bff/            backend for frontend: /me y /resumen agregado
+  ms-notificaciones/    consumidores RabbitMQ: notificaciones, comprobantes y auditoría
+  ms-mensajeria-admin/  administrador de RabbitMQ (colas, exchanges, bindings)
 frontend/         React 19 + Vite + TypeScript
 deploy/ec2/       units systemd, plantilla de variables y script de despliegue
+deploy/mensajeria/  docker compose del clúster RabbitMQ y de los microservicios de mensajería
 infra/            scripts AWS CLI, Lambda de registro, estilo del Hosted UI y pruebas end-to-end
 docs/             diagramas
 ```
@@ -137,6 +187,15 @@ Cada servicio del backend sigue la misma estructura por capas: `controller`, `se
 | EP2 · Tenant, app client, resource server, registro y login | `infra/02-amplify-cognito.sh`, `infra/09-cognito-registro.sh` |
 | EP2 · Authorization Code + PKCE, state y nonce | `frontend/src/auth/oidc.ts` |
 | EP2 · Evidencia de cada ruta con y sin token | `infra/smoke-test.sh` |
+| EP3 · Nombres de colas, exchanges y bindings centralizados | `mensajeria:` en `application.yml` + `MensajeriaProperties` (ms-pedidos, ms-notificaciones), `mensajeria.admin` (ms-mensajeria-admin) |
+| EP3 · Beans Queue, Exchange y Binding por caso de uso | `ms-notificaciones/.../mensajeria/RabbitConfig.java`, `ms-pedidos/.../mensajeria/RabbitConfig.java` |
+| EP3 · Mensajería separada de la lógica de negocio | `PedidoService` emite eventos de Spring; `PublicadorEventosRabbit` y `RabbitConfig` en el paquete `mensajeria` |
+| EP3 · `@RabbitListener` agrupados por dominio | `ms-notificaciones/.../consumer/{notificaciones,comprobantes,auditoria}` |
+| EP3 · ACK manual, reintentos, NACK y DLQ con logs | `ConfirmadorMensajes.java` (y sus pruebas `ConfirmadorMensajesTests`) |
+| EP3 · API REST del administrador | `ms-mensajeria-admin/.../controller/` |
+| EP3 · Lógica encapsulada en `RabbitAdminService` | `ms-mensajeria-admin/.../service/RabbitAdminService.java` |
+| EP3 · Validación de la entrada | `ms-mensajeria-admin/.../dto/` (Bean Validation) y `GlobalExceptionHandler` |
+| EP4 · Dos nodos en clúster, docker compose en la nube | `deploy/mensajeria/`, `infra/10-rabbitmq-ec2.sh`, `infra/11-deploy-mensajeria.sh` |
 
 ## Ejecutar en local
 
@@ -150,6 +209,11 @@ cd backend/ms-productos && ./mvnw spring-boot:run
 cd backend/ms-pedidos   && ./mvnw spring-boot:run
 cd backend/bff          && ./mvnw spring-boot:run
 
+# Mensajería (opcional): RabbitMQ local y los dos microservicios
+docker run -d --name rabbit -p 5672:5672 -p 15672:15672 rabbitmq:4.1-management
+cd backend/ms-notificaciones   && ./mvnw spring-boot:run
+cd backend/ms-mensajeria-admin && ./mvnw spring-boot:run
+
 # Frontend (http://localhost:4200)
 cd frontend && npm install && npm run dev
 ```
@@ -160,7 +224,7 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 | Qué | Cómo | Cantidad |
 |---|---|---|
-| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado y un pedido en curso por cliente) | 54 |
+| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ y la validación del administrador) | 96 |
 | Frontend | `npm test` en `frontend/` (Vitest) | 28 |
 | End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo | 29 verificaciones |
 
@@ -178,6 +242,10 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 | `WEBPAY_BASE_URL`, `WEBPAY_COMMERCE_CODE`, `WEBPAY_API_KEY` | Ambiente y credenciales de Transbank | ambiente de integración con sus credenciales públicas |
 | `WEBPAY_RETURN_URL` | Ruta pública de API Gateway a la que vuelve el navegador desde Webpay | `localhost:8082` |
 | `FRONTEND_ORIGINS` | Sitios a los que se puede devolver al cliente después de pagar | `http://localhost:4200` |
+| `RABBIT_ADDRESSES` | Nodos del clúster RabbitMQ (`host:puerto,host:puerto`) | `localhost:5672` |
+| `MQ_USER`, `MQ_PASSWORD` | Usuario de RabbitMQ | `guest` |
+| `RABBIT_MANAGEMENT_URL` | API de management (solo ms-mensajeria-admin) | `http://localhost:15672` |
+| `SIMULAR_FALLOS` | Permite el header `x-simular-fallo` para demostrar reintentos (ms-notificaciones) | `true` |
 
 ### Frontend
 
@@ -198,7 +266,7 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | Script | Crea o hace |
 |---|---|
 | `01-network-rds.sh` | Security groups y RDS PostgreSQL (privado, solo accesible desde la EC2) |
-| `02-amplify-cognito.sh` | App de Amplify; user pool, grupos ADMIN/CLIENTE, resource server `pedidos360` con 4 scopes, app client público (Auth Code + PKCE), dominio del Hosted UI y usuarios de prueba |
+| `02-amplify-cognito.sh` | App de Amplify; user pool, grupos ADMIN/CLIENTE, resource server `pedidos360` con 5 scopes, app client público (Auth Code + PKCE), dominio del Hosted UI y usuarios de prueba |
 | `03-ec2.sh` | EC2 t3.small (Amazon Linux 2023 + Corretto 21) con Elastic IP |
 | `04-apigw.sh` | HTTP API con CORS (solo el sitio principal; `CORS_DEV=1` agrega preview y localhost), authorizer JWT de Cognito y una ruta por endpoint con su scope |
 | `05-deploy-backend.sh` | BD `pedidos`, variables de entorno en la EC2 y despliegue de los 3 servicios con systemd |
@@ -206,6 +274,8 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores de Cognito y API Gateway |
 | `08-cognito-ui.sh` | Logo y colores de Pedidos360 en el Hosted UI de Cognito (`infra/cognito-ui/`) |
 | `09-cognito-registro.sh` | Lambda *post confirmation* que agrega a cada usuario registrado al grupo CLIENTE |
+| `10-rabbitmq-ec2.sh` | EC2 t3.medium de mensajería con Docker, security group propio (AMQP solo desde la EC2 backend, consola solo desde tu IP) y Elastic IP |
+| `11-deploy-mensajeria.sh` | Compila los microservicios de mensajería, copia el compose, escribe `.env` y la cookie de Erlang y ejecuta `docker compose up` (`SOLO_RABBIT=1` levanta solo los nodos) |
 | `encender.sh` | Enciende la EC2 y RDS si el lab las apagó y espera a que los servicios respondan |
 | `ssh-mi-ip.sh` | Autoriza SSH desde tu IP actual (cuando cambias de red) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
@@ -215,7 +285,7 @@ Las credenciales del lab expiran cada ~4 horas; al reiniciar el lab hay que volv
 
 ## Flujo de trabajo
 
-- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.3.1`).
+- `main`: versión estable y publicada. Cada versión tiene su tag (`v1.0.0` … `v1.4.0`).
 - `dev`: integración.
 - `feature/*`, `fix/*`, `chore/*`, `docs/*`: una rama por cambio, que sale de `dev` y vuelve por Pull Request.
 
