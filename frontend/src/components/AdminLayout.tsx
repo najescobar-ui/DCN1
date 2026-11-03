@@ -14,6 +14,7 @@ export function AdminLayout() {
             Pedidos
           </NavLink>
           <NavLink to="/admin/productos">Productos</NavLink>
+          <NavLink to="/admin/mensajeria">Mensajería</NavLink>
           <NavLink to="/catalogo">Ver tienda</NavLink>
           <NavLink to="/admin/token">Mi token</NavLink>
         </nav>

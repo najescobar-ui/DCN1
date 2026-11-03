@@ -106,3 +106,92 @@ export interface Resumen {
   ultimosPedidos: Pick<Pedido, 'id' | 'clienteUsername' | 'estado' | 'total' | 'creadoEn'>[]
   productosDestacados: Producto[]
 }
+
+// ---------- Mensajería (RabbitMQ) ----------
+
+export type TipoCola = 'QUORUM' | 'CLASSIC'
+export type TipoExchange = 'DIRECT' | 'TOPIC' | 'FANOUT' | 'HEADERS'
+
+export interface ColaInfo {
+  nombre: string
+  tipo: string
+  durable: boolean
+  nodo: string
+  mensajes: number
+  listos: number
+  sinConfirmar: number
+  consumidores: number
+  argumentos: Record<string, unknown> | null
+}
+
+export interface ExchangeInfo {
+  nombre: string
+  tipo: string
+  durable: boolean
+  interno: boolean
+}
+
+export interface BindingInfo {
+  exchange: string
+  destino: string
+  tipoDestino: string
+  routingKey: string
+}
+
+export interface ClusterInfo {
+  nombre: string
+  version: string
+  nodos: { nombre: string; activo: boolean; memoriaUsadaBytes: number; uptimeMs: number }[]
+}
+
+export interface CrearColaRequest {
+  nombre: string
+  tipo: TipoCola
+  conDlq: boolean
+  ttlMs?: number | null
+  limiteEntregas?: number | null
+}
+
+export interface BindingRequest {
+  exchange: string
+  cola: string
+  routingKey: string
+}
+
+export interface PublicarMensajeRequest {
+  exchange: string
+  routingKey: string
+  cuerpo: string
+  headers?: Record<string, string>
+}
+
+export interface Notificacion {
+  id: number
+  pedidoId: number
+  clienteUsername?: string | null
+  tipo: string
+  mensaje: string
+  creadaEn: string
+}
+
+export interface Comprobante {
+  id: number
+  folio: string
+  pedidoId: number
+  clienteUsername?: string | null
+  metodoPago?: string | null
+  total: number
+  emitidoEn: string
+}
+
+export interface RegistroAuditoria {
+  id: number
+  eventoId: string
+  routingKey: string
+  tipo: string
+  pedidoId: number
+  estado?: string | null
+  estadoPago?: string | null
+  clienteUsername?: string | null
+  recibidoEn: string
+}
