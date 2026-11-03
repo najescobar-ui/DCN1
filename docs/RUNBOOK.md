@@ -114,8 +114,7 @@ infra/ssh-mi-ip.sh
 Corre en la EC2 `pedidos360-mensajeria` (`MQ_IP` en `state.env`), dentro de `/opt/pedidos360-mq` con docker compose: `rabbit1`, `rabbit2`, `ms-notificaciones` y `ms-mensajeria-admin`.
 
 ```bash
-source infra/lib.sh
-ssh -i "$KEY_FILE" ec2-user@$MQ_IP
+ssh -i ~/.ssh/pedidos360-dce1.pem ec2-user@<MQ_IP>   # MQ_IP está en infra/state.env
 cd /opt/pedidos360-mq
 docker compose ps                                                  # los 4 contenedores
 docker exec pedidos360-mq-rabbit1-1 rabbitmqctl cluster_status     # Running Nodes: rabbit1 y rabbit2

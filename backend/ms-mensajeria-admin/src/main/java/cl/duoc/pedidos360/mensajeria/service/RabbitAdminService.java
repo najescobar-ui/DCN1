@@ -173,10 +173,12 @@ public class RabbitAdminService {
                     break;
                 }
                 Map<String, Object> headers = new HashMap<>(r.getProps().getHeaders());
-                // Se limpia el historial de rechazos y los headers de la demostración (el fallo simulado
+                // Se limpia el historial de rechazos y el conteo de entregas (el mensaje vuelve con sus 3
+                // intentos completos) y los headers de la demostración (el fallo simulado
                 // representa una caída que ya se resolvió).
                 headers.keySet().removeIf(h -> h.startsWith("x-death") || h.startsWith("x-first-death")
-                        || h.startsWith("x-last-death") || props.headersDemo().contains(h));
+                        || h.startsWith("x-last-death") || h.equals("x-delivery-count")
+                        || props.headersDemo().contains(h));
                 AMQP.BasicProperties propiedades = r.getProps().builder().headers(headers).build();
                 // Exchange por defecto + nombre de cola: llega solo a la cola original, no a todas las del topic.
                 canal.basicPublish("", colaOrigen, propiedades, r.getBody());

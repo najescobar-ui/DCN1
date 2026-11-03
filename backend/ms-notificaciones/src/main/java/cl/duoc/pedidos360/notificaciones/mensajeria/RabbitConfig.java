@@ -132,8 +132,9 @@ public class RabbitConfig {
     // ---------- Consumidores ----------
 
     /**
-     * Fábrica de los @RabbitListener: confirmación MANUAL (cada consumidor decide ack o nack), prefetch
-     * limitado y sin reencolar por defecto, para que una excepción no controlada no genere un bucle.
+     * Fábrica de los @RabbitListener: confirmación MANUAL (ConfirmadorMensajes decide ack o nack en cada
+     * mensaje) y prefetch limitado. defaultRequeueRejected=false es solo una red de seguridad: si algo
+     * escapara al confirmador, el contenedor no reencola en bucle; el flujo normal nunca depende de ella.
      */
     @Bean
     SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
