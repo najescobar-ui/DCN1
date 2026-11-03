@@ -68,6 +68,7 @@ public class PagoService {
             return destino(properties.frontendOrigins().get(0), "error", null);
         }
         Pedido pedido = encontrado.get();
+        EstadoPago pagoAnterior = pedido.getEstadoPago();
         String resultado;
         if (tokenWs != null && tbkToken == null) {
             resultado = confirmar(pedido, tokenWs);
@@ -75,6 +76,7 @@ public class PagoService {
             pedido.cambiarEstadoPago(EstadoPago.RECHAZADO);
             resultado = "anulado";
         }
+        pedidoService.publicarCambioDePago(pagoAnterior, pedido);
         return destino(properties.origenPermitido(pedido.getPagoOrigen()), resultado, pedido.getId());
     }
 

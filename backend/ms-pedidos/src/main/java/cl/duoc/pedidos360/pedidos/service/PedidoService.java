@@ -2,6 +2,7 @@ package cl.duoc.pedidos360.pedidos.service;
 
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +12,8 @@ import cl.duoc.pedidos360.pedidos.client.ProductosClient;
 import cl.duoc.pedidos360.pedidos.dto.CrearPedidoRequest;
 import cl.duoc.pedidos360.pedidos.dto.ItemRequest;
 import cl.duoc.pedidos360.pedidos.dto.PedidoResponse;
+import cl.duoc.pedidos360.pedidos.evento.EventoPedido;
+import cl.duoc.pedidos360.pedidos.evento.TipoEvento;
 import cl.duoc.pedidos360.pedidos.exception.OperacionNoPermitidaException;
 import cl.duoc.pedidos360.pedidos.exception.ProductoNoDisponibleException;
 import cl.duoc.pedidos360.pedidos.exception.RecursoNoEncontradoException;
@@ -30,10 +33,13 @@ public class PedidoService {
 
     private final PedidoRepository repository;
     private final ProductosClient productosClient;
+    private final ApplicationEventPublisher eventos;
 
-    public PedidoService(PedidoRepository repository, ProductosClient productosClient) {
+    public PedidoService(PedidoRepository repository, ProductosClient productosClient,
+            ApplicationEventPublisher eventos) {
         this.repository = repository;
         this.productosClient = productosClient;
+        this.eventos = eventos;
     }
 
     public List<PedidoResponse> listar(Usuario usuario) {
@@ -64,7 +70,9 @@ public class PedidoService {
             }
             pedido.agregarItem(new ItemPedido(producto.id(), producto.nombre(), item.cantidad(), producto.precio()));
         }
-        return PedidoResponse.from(repository.save(pedido));
+        Pedido guardado = repository.save(pedido);
+        publicar(TipoEvento.PEDIDO_CREADO, guardado);
+        return PedidoResponse.from(guardado);
     }
 
     @Transactional
@@ -75,18 +83,26 @@ public class PedidoService {
             throw new OperacionNoPermitidaException(
                     "Un pedido " + pedido.getEstado() + " no puede pasar a " + estado);
         }
+        boolean cambio = pedido.getEstado() != estado;
+        EstadoPago pagoAnterior = pedido.getEstadoPago();
         pedido.cambiarEstado(estado);
         // En efectivo, el repartidor cobra al entregar: el pago queda confirmado junto con la entrega.
         if (estado == EstadoPedido.ENTREGADO && pedido.getMetodoPago() == MetodoPago.EFECTIVO) {
             pedido.cambiarEstadoPago(EstadoPago.PAGADO);
         }
+        if (cambio) {
+            publicar(TipoEvento.ESTADO_CAMBIADO, pedido);
+        }
+        publicarCambioDePago(pagoAnterior, pedido);
         return PedidoResponse.from(pedido);
     }
 
     @Transactional
     public PedidoResponse cambiarEstadoPago(Long id, EstadoPago estadoPago) {
         Pedido pedido = buscar(id);
+        EstadoPago pagoAnterior = pedido.getEstadoPago();
         pedido.cambiarEstadoPago(estadoPago);
+        publicarCambioDePago(pagoAnterior, pedido);
         return PedidoResponse.from(pedido);
     }
 
@@ -101,6 +117,7 @@ public class PedidoService {
             throw new OperacionNoPermitidaException("El pedido ya fue pagado; para anularlo contacta a la tienda");
         }
         pedido.cambiarEstado(EstadoPedido.CANCELADO);
+        publicar(TipoEvento.ESTADO_CAMBIADO, pedido);
         return PedidoResponse.from(pedido);
     }
 
@@ -111,6 +128,26 @@ public class PedidoService {
             throw new AccessDeniedException("El pedido pertenece a otro cliente");
         }
         return pedido;
+    }
+
+    /**
+     * Anuncia un hecho de negocio. El servicio no sabe de RabbitMQ: emite un evento de Spring y la capa de
+     * mensajería lo publica cuando la transacción hace commit.
+     */
+    public void publicar(TipoEvento tipo, Pedido pedido) {
+        eventos.publishEvent(EventoPedido.de(tipo, pedido));
+    }
+
+    /** Publica el resultado del pago solo cuando el estado de pago realmente cambia. */
+    public void publicarCambioDePago(EstadoPago anterior, Pedido pedido) {
+        if (anterior == pedido.getEstadoPago()) {
+            return;
+        }
+        if (pedido.getEstadoPago() == EstadoPago.PAGADO) {
+            publicar(TipoEvento.PAGO_APROBADO, pedido);
+        } else if (pedido.getEstadoPago() == EstadoPago.RECHAZADO) {
+            publicar(TipoEvento.PAGO_RECHAZADO, pedido);
+        }
     }
 
     private Pedido buscar(Long id) {
