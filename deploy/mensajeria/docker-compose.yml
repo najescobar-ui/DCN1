@@ -1,0 +1,86 @@
+# Mensajería de Pedidos360: clúster RabbitMQ de dos nodos + microservicios que lo usan.
+# Uso (en la EC2 de mensajería): docker compose up -d --build
+name: pedidos360-mq
+
+x-rabbit: &rabbit
+  image: rabbitmq:4.1-management
+  restart: unless-stopped
+  environment:
+    RABBITMQ_DEFAULT_USER: ${MQ_USER}
+    RABBITMQ_DEFAULT_PASS: ${MQ_PASSWORD}
+  healthcheck:
+    test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+    interval: 10s
+    timeout: 10s
+    retries: 12
+    start_period: 20s
+
+x-java: &java
+  restart: unless-stopped
+  build:
+    context: .
+    dockerfile: Dockerfile.java
+  depends_on:
+    rabbit1: { condition: service_healthy }
+    rabbit2: { condition: service_healthy }
+
+services:
+  rabbit1:
+    <<: *rabbit
+    hostname: rabbit1
+    ports: ["5672:5672", "15672:15672"]
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./secrets/erlang.cookie:/var/lib/rabbitmq/.erlang.cookie:ro
+      - rabbit1-data:/var/lib/rabbitmq/mnesia
+
+  rabbit2:
+    <<: *rabbit
+    hostname: rabbit2
+    ports: ["5673:5672", "15673:15672"]
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./secrets/erlang.cookie:/var/lib/rabbitmq/.erlang.cookie:ro
+      - rabbit2-data:/var/lib/rabbitmq/mnesia
+
+  ms-notificaciones:
+    <<: *java
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+      args: { JAR: jars/ms-notificaciones.jar }
+    ports: ["8084:8084"]
+    environment:
+      PORT: 8084
+      JAVA_OPTS: -Xms128m -Xmx256m
+      RABBIT_ADDRESSES: rabbit1:5672,rabbit2:5672
+      MQ_USER: ${MQ_USER}
+      MQ_PASSWORD: ${MQ_PASSWORD}
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+      DB_URL: ${DB_URL}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+  ms-mensajeria-admin:
+    <<: *java
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+      args: { JAR: jars/ms-mensajeria-admin.jar }
+    ports: ["8083:8083"]
+    environment:
+      PORT: 8083
+      JAVA_OPTS: -Xms128m -Xmx256m
+      RABBIT_ADDRESSES: rabbit1:5672,rabbit2:5672
+      RABBIT_MANAGEMENT_URL: http://rabbit1:15672
+      MQ_USER: ${MQ_USER}
+      MQ_PASSWORD: ${MQ_PASSWORD}
+      COGNITO_ISSUER_URI: ${COGNITO_ISSUER_URI}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
+
+volumes:
+  rabbit1-data:
+  rabbit2-data:
