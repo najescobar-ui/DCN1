@@ -13,6 +13,15 @@ spring:
     hibernate:
       ddl-auto: ${DDL_AUTO:update}
     open-in-view: false
+  # Clúster RabbitMQ (dos nodos). En AWS: RABBIT_ADDRESSES=<ip privada>:5672,<ip privada>:5673
+  rabbitmq:
+    addresses: ${RABBIT_ADDRESSES:localhost:5672}
+    username: ${MQ_USER:guest}
+    password: ${MQ_PASSWORD:guest}
+    connection-timeout: 3s
+    # El broker confirma cada publicación y devuelve los mensajes que no llegan a ninguna cola.
+    publisher-confirm-type: correlated
+    publisher-returns: true
 
 app:
   security:
@@ -35,7 +44,23 @@ app:
       api-key: ${WEBPAY_API_KEY:579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C}
       return-url: ${WEBPAY_RETURN_URL:http://localhost:8082/api/pagos/webpay/retorno}
 
+# Nombres de mensajería en un solo lugar (ver MensajeriaProperties).
+mensajeria:
+  exchanges:
+    eventos: pedidos.eventos
+    comandos: pedidos.comandos
+  routing-keys:
+    pedido-creado: pedido.creado
+    pedido-estado: pedido.estado
+    pago-aprobado: pago.aprobado
+    pago-rechazado: pago.rechazado
+    generar-comprobante: comprobante.generar
+
 management:
+  # La salud de ms-pedidos no depende de RabbitMQ: si la mensajería cae, los pedidos siguen funcionando.
+  health:
+    rabbit:
+      enabled: false
   endpoints:
     web:
       exposure:
