@@ -3,7 +3,7 @@
 # guardados en state.env. Se corre después de 02 y 04, y cada vez que cambie el user pool o la API.
 source "$(dirname "$0")/lib.sh"
 FRONT="$INFRA_DIR/../frontend"
-SCOPE="openid email profile pedidos360/productos.read pedidos360/productos.write pedidos360/pedidos.read pedidos360/pedidos.write"
+SCOPE="openid email profile pedidos360/productos.read pedidos360/productos.write pedidos360/pedidos.read pedidos360/pedidos.write pedidos360/mensajeria.admin"
 
 escribir() {  # archivo comentario
   cat > "$FRONT/$1" <<ENV

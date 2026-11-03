@@ -14,10 +14,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param protegidos       colas y exchanges del sistema que no se pueden eliminar
  * @param prefijoReservado prefijo de los objetos internos de RabbitMQ
  * @param maxReproceso     tope de mensajes por operación de reproceso
+ * @param headersDemo      headers de demostración que se quitan al reprocesar una DLQ
  */
 @ConfigurationProperties("mensajeria.admin")
 public record AdminProperties(String managementUrl, String vhost, String sufijoDlq, String dlx,
-        List<String> protegidos, String prefijoReservado, int maxReproceso) {
+        List<String> protegidos, String prefijoReservado, int maxReproceso, List<String> headersDemo) {
 
     public boolean esProtegido(String nombre) {
         return protegidos.contains(nombre) || nombre.startsWith(prefijoReservado) || nombre.isEmpty();

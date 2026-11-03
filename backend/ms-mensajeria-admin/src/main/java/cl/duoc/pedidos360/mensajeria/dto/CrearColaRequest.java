@@ -18,7 +18,7 @@ import jakarta.validation.constraints.Pattern;
  * @param limiteEntregas entregas fallidas antes de mandar a la DLQ (solo quorum, opcional)
  */
 public record CrearColaRequest(
-        @NotBlank @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String nombre,
+        @NotBlank(message = "es obligatorio") @Pattern(regexp = Nombres.PATRON_NOMBRE, message = Nombres.MENSAJE_NOMBRE) String nombre,
         @NotNull(message = "es obligatorio (QUORUM o CLASSIC)") TipoCola tipo,
         Boolean conDlq,
         @Min(value = 1000, message = "debe ser de al menos 1000 ms") @Max(value = 604_800_000, message = "no puede superar 7 días") Long ttlMs,
