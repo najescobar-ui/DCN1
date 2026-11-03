@@ -91,7 +91,7 @@ Al terminar cada sesión, el lab apaga la EC2 y RDS. Cognito, API Gateway y Ampl
 infra/encender.sh
 ```
 
-Enciende RDS y la EC2 si están apagadas y espera a que los tres servicios respondan `UP`. Los servicios arrancan solos con systemd; la IP elástica no cambia.
+Enciende RDS y las dos EC2 (backend y mensajería) si están apagadas y espera a que los cinco servicios respondan `UP`. Los de la EC2 backend arrancan con systemd y los de mensajería con Docker (`restart: unless-stopped`); las IPs elásticas no cambian.
 
 ### 4.2 Verificar que todo funciona
 
@@ -99,7 +99,7 @@ Enciende RDS y la EC2 si están apagadas y espera a que los tres servicios respo
 infra/smoke-test.sh
 ```
 
-Debe terminar con **`Resultado: 29 OK, 0 con diferencias`**. Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
+Debe terminar con **`Resultado: 38 OK, 0 con diferencias`** (29 de la API y 9 de mensajería). Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
 
 ### 4.3 Si cambiaste de red (casa, Duoc, celular)
 
@@ -108,6 +108,24 @@ La EC2 solo acepta SSH desde las IPs autorizadas. Si `05-deploy-backend.sh` se q
 ```bash
 infra/ssh-mi-ip.sh
 ```
+
+### 4.4 Mensajería (RabbitMQ)
+
+Corre en la EC2 `pedidos360-mensajeria` (`MQ_IP` en `state.env`), dentro de `/opt/pedidos360-mq` con docker compose: `rabbit1`, `rabbit2`, `ms-notificaciones` y `ms-mensajeria-admin`.
+
+```bash
+source infra/lib.sh
+ssh -i "$KEY_FILE" ec2-user@$MQ_IP
+cd /opt/pedidos360-mq
+docker compose ps                                                  # los 4 contenedores
+docker exec pedidos360-mq-rabbit1-1 rabbitmqctl cluster_status     # Running Nodes: rabbit1 y rabbit2
+docker exec pedidos360-mq-rabbit1-1 rabbitmqctl list_queues name type messages consumers
+docker compose logs -f ms-notificaciones | grep -E "ACK|NACK"      # decisiones de los consumidores
+```
+
+Consola web de RabbitMQ: `http://<MQ_IP>:15672` (nodo 1) y `:15673` (nodo 2), usuario `MQ_USER` y clave `MQ_PASSWORD` de `state.env`. Solo se abre desde la IP que corrió `10-rabbitmq-ec2.sh`; si cambiaste de red vuelve a correrlo (no recrea nada, solo agrega la regla).
+
+Para mostrar los reintentos y la DLQ, en el sitio: **Admin → Mensajería → Probar las rutas** (evento válido, mensaje inválido, fallo transitorio) y después **Reprocesar** en la DLQ. Los contadores de la API de management se actualizan cada 5 segundos.
 
 ---
 
@@ -127,7 +145,15 @@ infra/05-deploy-backend.sh
 
 Compila los tres servicios con Maven, copia los `.jar` a `/opt/pedidos360/` en la EC2, reescribe `/opt/pedidos360/pedidos360.env` con las variables (Cognito, base de datos, Webpay) y reinicia los servicios. Termina mostrando el estado `UP` de cada uno. Tarda unos 3 minutos.
 
-### 5.2 Frontend (Amplify)
+### 5.2 Mensajería (EC2 de RabbitMQ)
+
+```bash
+infra/11-deploy-mensajeria.sh
+```
+
+Compila `ms-notificaciones` y `ms-mensajeria-admin`, copia el compose, escribe `/opt/pedidos360-mq/.env` y la cookie de Erlang (fuera de git) y ejecuta `docker compose up -d --build`. Termina mostrando los nodos del clúster y el estado de los contenedores.
+
+### 5.3 Frontend (Amplify)
 
 ```bash
 BRANCH=main infra/06-deploy-frontend.sh       # producción: https://main.<AMPLIFY_APP_ID>.amplifyapp.com
@@ -136,7 +162,7 @@ BRANCH=preview infra/06-deploy-frontend.sh    # revisión:   https://preview.<AM
 
 Compila React con Vite, arma un zip y lo publica con la API de Amplify (despliegue manual, sin conexión a GitHub). Termina con `Job N: SUCCEED`.
 
-### 5.3 Probar en el preview o en local
+### 5.4 Probar en el preview o en local
 
 El CORS de producción solo acepta el sitio principal. Para probar en el preview o en `localhost:4200`, ábrelo mientras pruebas y ciérralo al terminar:
 
@@ -167,13 +193,15 @@ Tiempo total: unos 30 minutos, casi todo esperando a RDS.
 | 1 | `infra/01-network-rds.sh` | Security groups y RDS PostgreSQL privado | RDS tarda 5 a 10 minutos en estar disponible; puedes seguir con el paso 2 |
 | 2 | `infra/02-amplify-cognito.sh` | App de Amplify, user pool, grupos, scopes, app client, dominio del Hosted UI y usuarios `admin` y `cliente1` | Muestra las URLs nuevas; las claves quedan en `state.env` |
 | 3 | `infra/03-ec2.sh` | EC2 con Java 21, llave SSH e IP elástica | Espera 2 minutos después, para que termine de instalar Java |
-| 4 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integraciones y 16 rutas | Necesita la IP de la EC2 y los datos de Cognito |
-| 5 | `infra/05-deploy-backend.sh` | Base `pedidos`, variables en la EC2 y los tres servicios | Espera solo a que RDS esté disponible |
-| 6 | `infra/07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores nuevos | Ver 6.3 |
-| 7 | `BRANCH=main infra/06-deploy-frontend.sh` | Publica el sitio | Crea la rama de Amplify si no existe |
-| 8 | `infra/08-cognito-ui.sh` | Logo y colores del Hosted UI | Opcional |
-| 9 | `infra/09-cognito-registro.sh` | Lambda que agrega a los usuarios registrados al grupo CLIENTE | |
-| 10 | `infra/smoke-test.sh` | Verificación completa | Debe dar 29 OK |
+| 4 | `infra/10-rabbitmq-ec2.sh` | EC2 de mensajería con Docker, su security group, IP elástica y credenciales de RabbitMQ | Va antes de 04 y 05: ellos usan `MQ_IP` y `MQ_PRIVATE_IP` |
+| 5 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integraciones y 34 rutas | Necesita las IPs de las dos EC2 y los datos de Cognito |
+| 6 | `infra/05-deploy-backend.sh` | Base `pedidos`, variables en la EC2 (incluida la conexión a RabbitMQ) y los tres servicios | Espera solo a que RDS esté disponible |
+| 7 | `infra/11-deploy-mensajeria.sh` | Base `mensajeria`, clúster RabbitMQ de dos nodos y los dos microservicios de mensajería | Unos 4 minutos la primera vez (descarga imágenes) |
+| 8 | `infra/07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores nuevos | Ver 6.3 |
+| 9 | `BRANCH=main infra/06-deploy-frontend.sh` | Publica el sitio | Crea la rama de Amplify si no existe |
+| 10 | `infra/08-cognito-ui.sh` | Logo y colores del Hosted UI | Opcional |
+| 11 | `infra/09-cognito-registro.sh` | Lambda que agrega a los usuarios registrados al grupo CLIENTE | |
+| 12 | `infra/smoke-test.sh` | Verificación completa | Debe dar 38 OK |
 
 ### 6.3 Actualizar el repositorio con los valores nuevos
 
@@ -216,6 +244,10 @@ La mayoría de los valores salen de `state.env` o de la cuenta, así que en otro
 | Todas las llamadas dan 401 después de recrear Cognito | El frontend o el authorizer tienen el user pool anterior | `infra/04-apigw.sh`, `infra/05-deploy-backend.sh`, `infra/07-frontend-env.sh` y `06` |
 | `smoke-test.sh` falla al crear el pedido con 409 | `cliente1` tiene un pedido en curso que el script no pudo cerrar | Entregarlo o cancelarlo desde el panel de admin |
 | Amplify: `Job N: FAILED` | Error al compilar o subir | Correr `npm run build` en `frontend/` y revisar el error |
+| `/api/mensajeria/*` o `/api/notificaciones` responden 503 | EC2 de mensajería apagada | `infra/encender.sh` |
+| `/api/mensajeria/*` responde 403 siendo admin | El token no trae `pedidos360/mensajeria.admin` (sesión iniciada antes de agregar el scope) | Cerrar sesión y volver a entrar |
+| La consola de RabbitMQ no carga | Cambió tu IP pública | `infra/10-rabbitmq-ec2.sh` (agrega la regla para la IP actual) |
+| Un nodo no aparece en `cluster_status` | El contenedor se reinició y aún no vuelve a unirse | `docker compose restart rabbit2` y esperar 20 s |
 | RDS: `create-db-instance` falla por el nombre | Ya existe `pedidos360-db` de un intento anterior | Borrarla o cambiar `PROJECT` |
 
 Registros útiles:
