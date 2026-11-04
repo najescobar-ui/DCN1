@@ -170,7 +170,8 @@ backend/
 frontend/         React 19 + Vite + TypeScript
 deploy/ec2/       units systemd, plantilla de variables y script de despliegue
 deploy/mensajeria/  docker compose del clúster RabbitMQ y de los microservicios de mensajería
-infra/            scripts AWS CLI, Lambda de registro, estilo del Hosted UI y pruebas end-to-end
+infra/            scripts AWS CLI, Lambda de registro, estilo del Hosted UI, pruebas end-to-end y de carga
+tools/postman/    colección de Postman para el administrador de mensajería (pruebas funcionales y de carga)
 docs/             diagramas
 ```
 

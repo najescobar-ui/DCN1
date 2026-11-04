@@ -126,6 +126,36 @@ Consola web de RabbitMQ: `http://<MQ_IP>:15672` (nodo 1) y `:15673` (nodo 2), us
 
 Para mostrar los reintentos y la DLQ, en el sitio: **Admin → Mensajería → Probar las rutas** (evento válido, mensaje inválido, fallo transitorio) y después **Reprocesar** en la DLQ. Los contadores de la API de management se actualizan cada 5 segundos.
 
+### 4.5 Pruebas de carga
+
+`infra/carga-colas.sh` tiene tres modos. Ninguno toca los datos de los pedidos.
+
+```bash
+infra/carga-colas.sh perftest 60 500   # PerfTest: 60 s, 2 productores x 500 msg/s, 2 consumidores
+infra/carga-colas.sh api 200 10        # 200 mensajes por API Gateway, 10 en paralelo
+infra/carga-colas.sh dlq 20            # 20 mensajes inválidos a las DLQ reales (para la demo)
+```
+
+- **`perftest`** corre la imagen `pivotalrabbitmq/perf-test` en la EC2 de mensajería, dentro de la red de docker compose, conectada a los dos nodos. Usa su propia cola quorum y su propio exchange (`carga.perftest`) y los borra al terminar. Mientras corre, la consola de RabbitMQ (Overview) muestra la tasa en vivo. Resultado de referencia: ~600 msg/s confirmados, 0 rechazados, latencia mediana ~6 ms.
+- **`api`** recorre el camino completo con un token real de `admin`: crea con la API el exchange `carga.directo`, la cola `carga.api` con su DLQ y el binding, publica los mensajes, muestra cuántos llegaron y elimina todo.
+- **`dlq`** publica mensajes inválidos en `pedidos.eventos`; los consumidores de notificaciones y auditoría los mandan a sus DLQ. Después se vacían desde **Admin → Mensajería** (Purgar) o con `DELETE /api/mensajeria/queues/<dlq>/messages`.
+
+Si una corrida se corta a la mitad, puede quedar la topología de prueba (`carga.*`). Se borra desde **Admin → Mensajería** o volviendo a correr el modo, que la recrea y la elimina al final.
+
+### 4.6 Colección de Postman
+
+`tools/postman/Pedidos360-Mensajeria.postman_collection.json` (Postman → Import).
+
+1. En la colección, pestaña **Authorization** → **Get New Access Token**. Abre el login de Cognito (Authorization Code + PKCE); entrar como `admin` → **Use Token**. Las variables `baseUrl`, `cognitoDomain` y `clientId` ya tienen los valores del lab actual.
+2. Correr las carpetas en orden: **1 Clúster**, **2 Crear topología de prueba**, **3 Validación** (deben dar 400, 401 y 409), **4 Carga**, **5 Verificar**, **6 Limpieza**.
+3. La carpeta **4 Carga** se corre con el **Collection Runner** (por ejemplo 200 iteraciones). **5 Verificar** espera 6 s antes de leer la cola porque los contadores de RabbitMQ van atrasados.
+
+Desde la terminal, con Newman (necesita un token en la colección, porque el login PKCE es interactivo):
+
+```bash
+npx newman run tools/postman/Pedidos360-Mensajeria.postman_collection.json
+```
+
 ---
 
 ## 5. Publicar cambios
@@ -210,6 +240,7 @@ Un lab nuevo tiene otro user pool, otra API y otra URL de Amplify. Después del 
 2. **README:** actualiza las URLs de la tabla del inicio (sitio y API).
 3. **Mapbox (opcional):** crea `frontend/.env.production.local` y `frontend/.env.development.local` con `VITE_MAPBOX_TOKEN=pk....` (no se suben a git) y, en tu cuenta de Mapbox, agrega la URL nueva del sitio a las restricciones del token. Sin token, el buscador usa OpenStreetMap.
 4. **Credenciales para el docente:** están en `infra/state.env` (`ADMIN_PASSWORD` y `CLIENTE_PASSWORD`).
+5. **Postman:** actualiza las variables `baseUrl`, `cognitoDomain` y `clientId` de `tools/postman/Pedidos360-Mensajeria.postman_collection.json` con `API_URL`, `COGNITO_DOMAIN` y `COGNITO_CLIENT_ID` de `state.env`.
 
 ---
 
@@ -246,6 +277,9 @@ La mayoría de los valores salen de `state.env` o de la cuenta, así que en otro
 | `/api/mensajeria/*` o `/api/notificaciones` responden 503 | EC2 de mensajería apagada | `infra/encender.sh` |
 | `/api/mensajeria/*` responde 403 siendo admin | El token no trae `pedidos360/mensajeria.admin` (sesión iniciada antes de agregar el scope) | Cerrar sesión y volver a entrar |
 | La consola de RabbitMQ no carga | Cambió tu IP pública | `infra/10-rabbitmq-ec2.sh` (agrega la regla para la IP actual) |
+| Postman: "Get New Access Token" falla o no vuelve | La URL de callback no coincide con el app client | Dejar `http://localhost:4200/callback` y la opción "Authorize using browser" desactivada |
+| `carga-colas.sh api` responde 409 al crear | Quedó la topología de una corrida anterior | Seguir: el script la usa y la elimina al final, o borrar `carga.*` desde Admin → Mensajería |
+| En la consola de RabbitMQ aparece un exchange `direct` sin uso | Lo dejó una versión anterior de `carga-colas.sh perftest` | Borrarlo en Exchanges → direct → Delete |
 | Un nodo no aparece en `cluster_status` | El contenedor se reinició y aún no vuelve a unirse | `docker compose restart rabbit2` y esperar 20 s |
 | RDS: `create-db-instance` falla por el nombre | Ya existe `pedidos360-db` de un intento anterior | Borrarla o cambiar `PROJECT` |
 
