@@ -20,23 +20,25 @@ Navegador (React en Amplify Hosting, HTTPS)
    │  2. Authorization: Bearer <access token>
    ▼
 API Gateway (HTTP API) ── authorizer JWT: firma, iss, audience, exp y scope por ruta ── CORS
-   │
-   ├─ /api/bff/*        ──► bff           :8080 ─┐ token relay
-   ├─ /api/productos/*  ──► ms-productos  :8081 ◄┤
-   ├─ /api/pedidos/*    ──► ms-pedidos    :8082 ◄┘──► ms-productos (precios)
-   │                            │   │      └──► Transbank Webpay (pagos)
+   │  las 36 rutas se integran con el BFF
+   ▼
+BFF :8080 (único puerto expuesto) ── valida el JWT otra vez · autoriza por rol (administración solo ADMIN)
+   │  /api/bff/me, /api/bff/resumen: los responde el BFF (resumen agrega productos + pedidos)
+   │  el resto lo reenvía según el prefijo, con el mismo token (token relay):
+   ├─ /api/productos/*  ──► ms-productos  :8081 ─┐
+   ├─ /api/pedidos/*, /api/pagos/* ──► ms-pedidos :8082 ──► ms-productos (precios) · Transbank Webpay
    │                            │   └── RDS PostgreSQL (BD productos / BD pedidos)
    │                            │ publica eventos (AMQP, después del commit)
    │                            ▼
-   │            ┌──── EC2 de mensajería · docker compose ─────────────────────────────┐
+   │            ┌──── EC2 de mensajería · docker compose (IP privada) ───────────────┐
    │            │  RabbitMQ rabbit1 ⇄ rabbit2 (clúster, colas quorum replicadas)      │
-   ├─ /api/notificaciones, /api/comprobantes, /api/auditoria                          │
-   │            │      ──► ms-notificaciones   :8084  consumidores ──► RDS (BD mensajeria)
+   ├─ /api/notificaciones, /api/comprobantes, /api/auditoria, /api/mensajes-fallidos   │
+   │            │      ──► ms-notificaciones   :8084  consumidores y listeners de DLQ ──► RDS (BD mensajeria)
    └─ /api/mensajeria/* ──► ms-mensajeria-admin :8083  crea/elimina colas, exchanges, bindings
                 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-Cada microservicio vuelve a validar el JWT aunque API Gateway ya lo haya hecho (defensa en profundidad): firma RS256 contra el JWKS de Cognito, vigencia, `iss`, `client_id`/`aud` y `token_use=access`. Los roles salen de `cognito:groups` y los scopes de `scope`.
+El JWT se valida tres veces (defensa en profundidad): API Gateway, el BFF y el microservicio que atiende la petición. En el BFF y en cada microservicio se revisa firma RS256 contra el JWKS de Cognito, vigencia, `iss`, `client_id`/`aud` y `token_use=access`. Los roles salen de `cognito:groups` y los scopes de `scope`.
 
 El detalle del login está en [`docs/flujo-login-pkce.png`](docs/flujo-login-pkce.png).
 
@@ -92,7 +94,8 @@ Routing keys publicadas: `pedido.creado`, `pedido.estado.<estado>` (confirmado, 
 - **Login:** Authorization Code + PKCE (`code_challenge_method=S256`), con `state` contra CSRF y `nonce` contra la reutilización del ID token. La contraseña solo se escribe en el Hosted UI de Cognito.
 - **App client público** (sin secreto). Solo permite el flujo *authorization code*; `ALLOW_USER_PASSWORD_AUTH` está deshabilitado. Access e ID token de 60 minutos, refresh token de 1 día y renovación automática antes del vencimiento.
 - **API Gateway:** authorizer JWT (issuer = user pool, audience = client id) en todas las rutas, con un scope exigido por ruta. Sin token o con token inválido responde 401; sin el scope, 403. La única ruta pública es el retorno de Webpay (ver [Pagos](#pagos-y-entrega)).
-- **Microservicios:** vuelven a validar el JWT y aplican el rol con `@PreAuthorize`. Sin sesión (*stateless*) y sin cookies. Errores en `application/problem+json`, y el 401 incluye `WWW-Authenticate`.
+- **BFF:** es el único backend expuesto (puerto 8080). Valida de nuevo issuer, audience, firma y vigencia, aplica la autorización por rol (CRUD de productos, cambios de estado y pago, auditoría y toda la administración de RabbitMQ solo para ADMIN) y reenvía al microservicio con el mismo token. Tabla de rutas en `app.enrutamiento` de su `application.yml`; código en `bff/.../enrutamiento/EnrutadorController.java`.
+- **Microservicios:** no se exponen a internet (8081-8082 solo dentro de la EC2; 8083-8084 solo desde la EC2 backend). Vuelven a validar el JWT y aplican el rol con `@PreAuthorize`. Sin sesión (*stateless*) y sin cookies. Errores en `application/problem+json`, y el 401 incluye `WWW-Authenticate`.
 - **CORS:** solo el origen del sitio, solo los métodos y headers usados, sin credenciales.
 - **Base de datos:** RDS sin acceso público; su security group solo acepta la EC2. Conexiones cifradas con TLS.
 - **Secretos:** ninguno en el repositorio. La clave de la base vive en la EC2 (`/opt/pedidos360/pedidos360.env`, permisos 600) y en `infra/state.env` (ignorado por git).
@@ -109,6 +112,8 @@ Quien se registra desde el sitio queda en `CLIENTE` gracias al trigger *post con
 Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `pedidos.read`, `pedidos.write` y `mensajeria.admin`. La administración de RabbitMQ exige el scope `mensajeria.admin` **y** el grupo ADMIN.
 
 ## Endpoints
+
+Todas las rutas entran por API Gateway y el BFF; la columna Servicio indica el microservicio al que el BFF reenvía.
 
 | Método | Ruta | Servicio | Scope | Rol |
 |---|---|---|---|---|
@@ -194,6 +199,7 @@ Cada servicio del backend sigue la misma estructura por capas: `controller`, `se
 | Indicador | Dónde |
 |---|---|
 | EP1 · Login, logout, guards, interceptor, tokens, roles y scopes | `frontend/src/auth/`, `frontend/src/api/http.ts` |
+| EP1/EP2 · API Gateway enruta al BFF; el BFF valida el JWT, autoriza por rol y no accede a la base | `infra/04-apigw.sh`, `bff/.../enrutamiento/`, `bff/.../security/SecurityConfig.java` |
 | EP1 · El backend valida issuer, audience, firma, vigencia y roles | `backend/*/src/main/java/**/security/`, `@PreAuthorize` en los controladores |
 | EP1 · Base de datos cloud (entidades, repositorios, conexión) | `model/`, `repository/`, `application.yml` (`DB_URL`) |
 | EP2 · Rutas del API Manager, JWT por ruta y CORS | `infra/04-apigw.sh` |
@@ -239,7 +245,7 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 | Qué | Cómo | Cantidad |
 |---|---|---|
-| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ, el registro y reproceso de mensajes no entregados y la validación del administrador) | 101 |
+| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ, el registro y reproceso de mensajes no entregados, la validación del administrador y el enrutamiento con autorización por rol del BFF) | 108 |
 | Frontend | `npm test` en `frontend/` (Vitest) | 28 |
 | End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo, más la mensajería | 40 verificaciones |
 | Carga de RabbitMQ | `infra/carga-colas.sh perftest`: PerfTest (herramienta oficial de RabbitMQ) en la EC2 de mensajería, 2 productores y 2 consumidores sobre una cola quorum de prueba conectada a los dos nodos | ~600 msg/s confirmados, latencia mediana ~6 ms |
@@ -256,6 +262,7 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 | `COGNITO_CLIENT_ID` | App client permitido (separados por coma si son varios) | placeholder |
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | Conexión a PostgreSQL | H2 en memoria |
 | `PRODUCTOS_URL`, `PEDIDOS_URL` | URLs internas entre servicios | `localhost:8081` / `localhost:8082` |
+| `NOTIFICACIONES_URL`, `MENSAJERIA_URL` | Microservicios de mensajería a los que el BFF reenvía (IP privada de la EC2 de RabbitMQ) | `localhost:8084` / `localhost:8083` |
 | `PORT` | Puerto HTTP | 8080 / 8081 / 8082 |
 | `WEBPAY_BASE_URL`, `WEBPAY_COMMERCE_CODE`, `WEBPAY_API_KEY` | Ambiente y credenciales de Transbank | ambiente de integración con sus credenciales públicas |
 | `WEBPAY_RETURN_URL` | Ruta pública de API Gateway a la que vuelve el navegador desde Webpay | `localhost:8082` |
