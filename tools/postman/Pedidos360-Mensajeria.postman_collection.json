@@ -736,7 +736,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "// La API de management de RabbitMQ actualiza sus contadores cada ~5 s.",
-                  "setTimeout(() => {}, 6000);"
+                  "setTimeout(() => {}, 10000);"
                 ]
               }
             }
@@ -815,6 +815,46 @@
               }
             }
           ]
+        },
+        {
+          "name": "Mensajes no entregados (listeners de DLQ)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// El listener de la DLQ registra el mensaje un instante después del NACK.",
+                  "setTimeout(() => {}, 3000);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const ultimo = pm.response.json()[0];",
+                  "pm.test(\"el mensaje inválido quedó registrado con motivo rejected\", () => pm.expect(ultimo.motivo).to.eql(\"rejected\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/mensajes-fallidos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "mensajes-fallidos"
+              ]
+            }
+          }
         }
       ]
     },

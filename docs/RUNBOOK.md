@@ -99,7 +99,7 @@ Enciende RDS y las dos EC2 (backend y mensajería) si están apagadas y espera a
 infra/smoke-test.sh
 ```
 
-Debe terminar con **`Resultado: 38 OK, 0 con diferencias`** (29 de la API y 9 de mensajería). Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
+Debe terminar con **`Resultado: 40 OK, 0 con diferencias`** (29 de la API y 11 de mensajería). Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
 
 ### 4.3 Si cambiaste de red (casa, Duoc, celular)
 
@@ -124,7 +124,19 @@ docker compose logs -f ms-notificaciones | grep -E "ACK|NACK"      # decisiones 
 
 Consola web de RabbitMQ: `http://<MQ_IP>:15672` (nodo 1) y `:15673` (nodo 2), usuario `MQ_USER` y clave `MQ_PASSWORD` de `state.env`. Solo se abre desde la IP que corrió `10-rabbitmq-ec2.sh`; si cambiaste de red vuelve a correrlo (no recrea nada, solo agrega la regla).
 
-Para mostrar los reintentos y la DLQ, en el sitio: **Admin → Mensajería → Probar las rutas** (evento válido, mensaje inválido, fallo transitorio) y después **Reprocesar** en la DLQ. Los contadores de la API de management se actualizan cada 5 segundos.
+Para mostrar los reintentos y la DLQ, en el sitio: **Admin → Mensajería → Probar las rutas** (evento válido, mensaje inválido, fallo transitorio). Cada DLQ tiene un listener en ms-notificaciones que registra el mensaje en el log (`[comprobantes-dlq] Mensaje no entregado registrado ...`) y en la tabla **Mensajes no entregados**, donde está el botón **Reprocesar**. Los contadores de la API de management se actualizan cada 5 segundos.
+
+```bash
+docker compose logs -f ms-notificaciones | grep -E "ACK|NACK|-dlq"   # consumidores y listeners de DLQ
+```
+
+**Retención y limpieza.** Las colas principales tienen TTL de 24 h y largo máximo de 10.000 mensajes (lo que vence o desborda pasa a su DLQ); las DLQ, 7 días y 1.000 (lo que vence se elimina). Se configuran en `mensajeria.retencion` de `backend/ms-notificaciones/src/main/resources/application.yml`. Para ver los argumentos aplicados:
+
+```bash
+docker exec pedidos360-mq-rabbit1-1 rabbitmqctl list_queues name arguments
+```
+
+Demostración de la expiración con el administrador (o desde **Admin → Mensajería → Nueva cola** con TTL 5000 y DLQ): crear `demo.ttl` con `{"nombre":"demo.ttl","tipo":"QUORUM","conDlq":true,"ttlMs":5000}`, enlazarla a `pedidos.comandos` con la routing key `demo.ttl`, publicar un mensaje con esa routing key y esperar 5 segundos: pasa de `demo.ttl` a `demo.ttl.dlq`. Al terminar, eliminar el binding y las dos colas.
 
 ### 4.5 Pruebas de carga
 
@@ -138,7 +150,7 @@ infra/carga-colas.sh dlq 20            # 20 mensajes inválidos a las DLQ reales
 
 - **`perftest`** corre la imagen `pivotalrabbitmq/perf-test` en la EC2 de mensajería, dentro de la red de docker compose, conectada a los dos nodos. Usa su propia cola quorum y su propio exchange (`carga.perftest`) y los borra al terminar. Mientras corre, la consola de RabbitMQ (Overview) muestra la tasa en vivo. Resultado de referencia: ~600 msg/s confirmados, 0 rechazados, latencia mediana ~6 ms.
 - **`api`** recorre el camino completo con un token real de `admin`: crea con la API el exchange `carga.directo`, la cola `carga.api` con su DLQ y el binding, publica los mensajes, muestra cuántos llegaron y elimina todo.
-- **`dlq`** publica mensajes inválidos en `pedidos.eventos`; los consumidores de notificaciones y auditoría los mandan a sus DLQ. Después se vacían desde **Admin → Mensajería** (Purgar) o con `DELETE /api/mensajeria/queues/<dlq>/messages`.
+- **`dlq`** publica mensajes inválidos en `pedidos.eventos`; los consumidores de notificaciones y auditoría los mandan a sus DLQ y los listeners de DLQ los registran. Quedan en **Admin → Mensajería → Mensajes no entregados**.
 
 Si una corrida se corta a la mitad, puede quedar la topología de prueba (`carga.*`). Se borra desde **Admin → Mensajería** o volviendo a correr el modo, que la recrea y la elimina al final.
 
@@ -148,7 +160,7 @@ Si una corrida se corta a la mitad, puede quedar la topología de prueba (`carga
 
 1. En la colección, pestaña **Authorization** → **Get New Access Token**. Abre el login de Cognito (Authorization Code + PKCE); entrar como `admin` → **Use Token**. Las variables `baseUrl`, `cognitoDomain` y `clientId` ya tienen los valores del lab actual.
 2. Correr las carpetas en orden: **1 Clúster**, **2 Crear topología de prueba**, **3 Validación** (deben dar 400, 401 y 409), **4 Carga**, **5 Verificar**, **6 Limpieza**.
-3. La carpeta **4 Carga** se corre con el **Collection Runner** (por ejemplo 200 iteraciones). **5 Verificar** espera 6 s antes de leer la cola porque los contadores de RabbitMQ van atrasados.
+3. La carpeta **4 Carga** se corre con el **Collection Runner** (por ejemplo 200 iteraciones). **5 Verificar** espera 10 s antes de leer la cola porque los contadores de RabbitMQ van atrasados.
 
 Desde la terminal, con Newman (necesita un token en la colección, porque el login PKCE es interactivo):
 
@@ -181,6 +193,12 @@ infra/11-deploy-mensajeria.sh
 ```
 
 Compila `ms-notificaciones` y `ms-mensajeria-admin`, copia el compose, escribe `/opt/pedidos360-mq/.env` y la cookie de Erlang (fuera de git) y ejecuta `docker compose up -d --build`. Termina mostrando los nodos del clúster y el estado de los contenedores.
+
+Si cambiaron los argumentos de las colas (TTL, largo máximo, DLX), RabbitMQ no deja redeclararlas: hay que borrarlas para que ms-notificaciones las cree de nuevo. Se pierden los mensajes que tengan.
+
+```bash
+RECREAR_COLAS=1 infra/11-deploy-mensajeria.sh
+```
 
 ### 5.3 Frontend (Amplify)
 
@@ -223,14 +241,14 @@ Tiempo total: unos 30 minutos, casi todo esperando a RDS.
 | 2 | `infra/02-amplify-cognito.sh` | App de Amplify, user pool, grupos, scopes, app client, dominio del Hosted UI y usuarios `admin` y `cliente1` | Muestra las URLs nuevas; las claves quedan en `state.env` |
 | 3 | `infra/03-ec2.sh` | EC2 con Java 21, llave SSH e IP elástica | Espera 2 minutos después, para que termine de instalar Java |
 | 4 | `infra/10-rabbitmq-ec2.sh` | EC2 de mensajería con Docker, su security group, IP elástica y credenciales de RabbitMQ | Va antes de 04 y 05: ellos usan `MQ_IP` y `MQ_PRIVATE_IP` |
-| 5 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integraciones y 34 rutas | Necesita las IPs de las dos EC2 y los datos de Cognito |
+| 5 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integraciones y 36 rutas | Necesita las IPs de las dos EC2 y los datos de Cognito |
 | 6 | `infra/05-deploy-backend.sh` | Base `pedidos`, variables en la EC2 (incluida la conexión a RabbitMQ) y los tres servicios | Espera solo a que RDS esté disponible |
 | 7 | `infra/11-deploy-mensajeria.sh` | Base `mensajeria`, clúster RabbitMQ de dos nodos y los dos microservicios de mensajería | Unos 4 minutos la primera vez (descarga imágenes) |
 | 8 | `infra/07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores nuevos | Ver 6.3 |
 | 9 | `BRANCH=main infra/06-deploy-frontend.sh` | Publica el sitio | Crea la rama de Amplify si no existe |
 | 10 | `infra/08-cognito-ui.sh` | Logo y colores del Hosted UI | Opcional |
 | 11 | `infra/09-cognito-registro.sh` | Lambda que agrega a los usuarios registrados al grupo CLIENTE | |
-| 12 | `infra/smoke-test.sh` | Verificación completa | Debe dar 38 OK |
+| 12 | `infra/smoke-test.sh` | Verificación completa | Debe dar 40 OK |
 
 ### 6.3 Actualizar el repositorio con los valores nuevos
 
@@ -280,6 +298,7 @@ La mayoría de los valores salen de `state.env` o de la cuenta, así que en otro
 | Postman: "Get New Access Token" falla o no vuelve | La URL de callback no coincide con el app client | Dejar `http://localhost:4200/callback` y la opción "Authorize using browser" desactivada |
 | `carga-colas.sh api` responde 409 al crear | Quedó la topología de una corrida anterior | Seguir: el script la usa y la elimina al final, o borrar `carga.*` desde Admin → Mensajería |
 | En la consola de RabbitMQ aparece un exchange `direct` sin uso | Lo dejó una versión anterior de `carga-colas.sh perftest` | Borrarlo en Exchanges → direct → Delete |
+| ms-notificaciones no arranca: `PRECONDITION_FAILED - inequivalent arg` | Cambiaron los argumentos de una cola que ya existe | `RECREAR_COLAS=1 infra/11-deploy-mensajeria.sh` |
 | Un nodo no aparece en `cluster_status` | El contenedor se reinició y aún no vuelve a unirse | `docker compose restart rabbit2` y esperar 20 s |
 | RDS: `create-db-instance` falla por el nombre | Ya existe `pedidos360-db` de un intento anterior | Borrarla o cambiar `PROJECT` |
 

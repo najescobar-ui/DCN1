@@ -14,8 +14,8 @@
 #
 #   ./carga-colas.sh dlq [mensajes]
 #       Publica N mensajes con JSON inválido en pedidos.eventos (routing key pedido.carga). Los consumidores
-#       de notificaciones y auditoría los rechazan sin reintento y terminan en sus DLQ, sin crear registros en
-#       la base. Sirve para ver la DLQ llenarse; después se vacía o reprocesa desde Admin → Mensajería.
+#       de notificaciones y auditoría los rechazan sin reintento, llegan a sus DLQ y los listeners de DLQ los
+#       registran (log + tabla mensaje_fallido). Se ven en Admin → Mensajería → Mensajes no entregados.
 source "$(dirname "$0")/lib.sh" >/dev/null
 DIR="$(dirname "$0")"
 MODO=${1:-}
@@ -90,9 +90,13 @@ dlq)
       "{\"exchange\":\"pedidos.eventos\",\"routingKey\":\"pedido.carga\",\"cuerpo\":\"esto no es un evento $i\"}" >/dev/null
   done
   sleep 6
-  echo "  notificaciones.pedidos.dlq: $(contar notificaciones.pedidos.dlq)"
-  echo "  auditoria.eventos.dlq:      $(contar auditoria.eventos.dlq)"
-  echo "  Se vacían o reprocesan desde Admin → Mensajería, o con DELETE /api/mensajeria/queues/<dlq>/messages"
+  echo "  Registrados por los listeners de DLQ (sin reprocesar):"
+  curl -s "$API_URL/api/mensajes-fallidos" -H "Authorization: Bearer $TOKEN" | python3 -c '
+import sys, json
+from collections import Counter
+c = Counter(f["dlq"] for f in json.load(sys.stdin) if not f.get("reprocesadoEn"))
+for dlq, n in sorted(c.items()): print(f"    {dlq}: {n}")'
+  echo "  Se ven y reprocesan en Admin → Mensajería → Mensajes no entregados"
   ;;
 *)
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
