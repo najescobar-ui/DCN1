@@ -25,8 +25,10 @@ regla "SSH desde $MI_IP"                       --protocol tcp --port 22 --cidr "
 regla "Consola RabbitMQ (15672-15673) desde $MI_IP" --protocol tcp --port 15672-15673 --cidr "$MI_IP/32"
 # AMQP solo desde la EC2 de los microservicios (productor ms-pedidos); nunca abierto a internet.
 regla "AMQP (5672-5673) desde la EC2 backend"  --protocol tcp --port 5672-5673 --source-group "$EC2_SG_ID"
-# API Gateway llama por IP pública (HTTP_PROXY); los microservicios validan el JWT igual que en la EC2 backend.
-regla "APIs 8083-8084 para API Gateway"        --protocol tcp --port 8083-8084 --cidr 0.0.0.0/0
+# ms-notificaciones y ms-mensajeria-admin solo los llama el BFF (EC2 backend) por IP privada; no se exponen.
+regla "APIs 8083-8084 desde la EC2 backend (BFF)" --protocol tcp --port 8083-8084 --source-group "$EC2_SG_ID"
+aws ec2 revoke-security-group-ingress --group-id "$MQ_SG_ID" --protocol tcp --port 8083-8084 --cidr 0.0.0.0/0 \
+  >/dev/null 2>&1 && echo "  - APIs 8083-8084 abiertas a internet (ya no se usan)" || true
 # ms-notificaciones guarda notificaciones, comprobantes y auditoría en la misma RDS.
 if aws ec2 authorize-security-group-ingress --group-id "$RDS_SG_ID" --protocol tcp --port 5432 \
   --source-group "$MQ_SG_ID" >/dev/null 2>&1; then echo "  + RDS 5432 desde mensajería"; else echo "  = RDS 5432 desde mensajería"; fi

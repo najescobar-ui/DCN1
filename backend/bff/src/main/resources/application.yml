@@ -12,9 +12,33 @@ app:
       client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
       default-role: CLIENTE
 
-  # Internal URLs of the microservices (same EC2 host in AWS).
+  # URLs internas de los microservicios (productos y pedidos en la misma EC2; mensajería en la EC2 de RabbitMQ).
   productos-url: ${PRODUCTOS_URL:http://localhost:8081}
   pedidos-url: ${PEDIDOS_URL:http://localhost:8082}
+  notificaciones-url: ${NOTIFICACIONES_URL:http://localhost:8084}
+  mensajeria-url: ${MENSAJERIA_URL:http://localhost:8083}
+
+  # API Gateway entrega todas las rutas al BFF; el BFF valida el JWT, aplica la autorización por rol
+  # (SecurityConfig) y reenvía cada petición al microservicio que corresponde según el prefijo de la ruta.
+  enrutamiento:
+    timeout: 15s
+    rutas:
+      - prefijo: /api/productos
+        destino: ${app.productos-url}
+      - prefijo: /api/pedidos
+        destino: ${app.pedidos-url}
+      - prefijo: /api/pagos
+        destino: ${app.pedidos-url}
+      - prefijo: /api/notificaciones
+        destino: ${app.notificaciones-url}
+      - prefijo: /api/comprobantes
+        destino: ${app.notificaciones-url}
+      - prefijo: /api/auditoria
+        destino: ${app.notificaciones-url}
+      - prefijo: /api/mensajes-fallidos
+        destino: ${app.notificaciones-url}
+      - prefijo: /api/mensajeria
+        destino: ${app.mensajeria-url}
 
 management:
   endpoints:

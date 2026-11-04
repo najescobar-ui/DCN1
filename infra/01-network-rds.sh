@@ -5,16 +5,18 @@ source "$(dirname "$0")/lib.sh"
 VPC_ID=${VPC_ID:-$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)}
 save VPC_ID "$VPC_ID"
 
-log "Security group EC2 (SSH from my IP, 8080-8082 for API Gateway)"
+log "Security group EC2 (SSH desde mi IP, 8080 para API Gateway)"
 if [ -z "${EC2_SG_ID:-}" ]; then
   EC2_SG_ID=$(aws ec2 create-security-group --group-name $PROJECT-ec2-sg --vpc-id "$VPC_ID" \
     --description "Pedidos360 microservices" --query GroupId --output text)
   save EC2_SG_ID "$EC2_SG_ID"
   MY_IP=$(curl -s https://checkip.amazonaws.com)
   aws ec2 authorize-security-group-ingress --group-id "$EC2_SG_ID" --protocol tcp --port 22 --cidr "$MY_IP/32" >/dev/null
-  # API Gateway HTTP API has no fixed source IPs; the services validate the JWT themselves.
-  aws ec2 authorize-security-group-ingress --group-id "$EC2_SG_ID" --protocol tcp --port 8080-8082 --cidr 0.0.0.0/0 >/dev/null
 fi
+# API Gateway entrega todo al BFF (8080). HTTP API no tiene IPs de origen fijas, por eso el BFF valida el JWT.
+# ms-productos (8081) y ms-pedidos (8082) solo los llama el BFF dentro de la misma máquina: no se exponen.
+aws ec2 authorize-security-group-ingress --group-id "$EC2_SG_ID" --protocol tcp --port 8080 --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
+aws ec2 revoke-security-group-ingress --group-id "$EC2_SG_ID" --protocol tcp --port 8080-8082 --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
 echo "EC2_SG_ID=$EC2_SG_ID"
 
 log "Security group RDS (5432 only from the EC2 security group)"
