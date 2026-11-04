@@ -45,11 +45,13 @@ perftest)
   # -f persistent + -c confirms: el mismo trato que reciben los eventos reales (persistentes y confirmados).
   "${SSH[@]}" "docker run --rm --network pedidos360-mq_default $PERFTEST_IMAGEN \
     --uris amqp://$MQ_USER:$MQ_PASSWORD@rabbit1:5672,amqp://$MQ_USER:$MQ_PASSWORD@rabbit2:5672 \
-    --queue carga.perftest --quorum-queue --routing-key carga.perftest \
+    --exchange carga.perftest --queue carga.perftest --quorum-queue --routing-key carga.perftest \
     --producers 2 --consumers 2 --rate $TASA --size 512 --flag persistent --confirm 100 \
     --time $SEGUNDOS --interval 5 --id carga"
   log "Limpieza de la cola de prueba"
   "${SSH[@]}" 'docker exec pedidos360-mq-rabbit1-1 rabbitmqctl -q delete_queue carga.perftest' || true
+  # PerfTest declara su propio exchange; se borra con la API de management (rabbitmqctl no elimina exchanges).
+  "${SSH[@]}" "curl -s -o /dev/null -u $MQ_USER:$MQ_PASSWORD -X DELETE http://localhost:15672/api/exchanges/%2F/carga.perftest" || true
   ;;
 api)
   N=${2:-200}; PARALELO=${3:-10}
