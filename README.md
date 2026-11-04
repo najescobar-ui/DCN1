@@ -226,7 +226,10 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 |---|---|---|
 | Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ y la validación del administrador) | 96 |
 | Frontend | `npm test` en `frontend/` (Vitest) | 28 |
-| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo | 29 verificaciones |
+| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo, más la mensajería | 38 verificaciones |
+| Carga de RabbitMQ | `infra/carga-colas.sh perftest`: PerfTest (herramienta oficial de RabbitMQ) en la EC2 de mensajería, 2 productores y 2 consumidores sobre una cola quorum de prueba conectada a los dos nodos | ~600 msg/s confirmados, latencia mediana ~6 ms |
+| Carga por API Gateway | `infra/carga-colas.sh api 200 10`: crea con la API un exchange, una cola con DLQ y su binding, publica 200 mensajes en paralelo con JWT y elimina todo al final. `infra/carga-colas.sh dlq 20` llena las DLQ reales con mensajes inválidos | 200/200 aceptados |
+| Postman | `tools/postman/Pedidos360-Mensajeria.postman_collection.json`: login con PKCE desde la pestaña Authorization, topología de prueba, validaciones (400/401/409), carga con el Collection Runner y limpieza | 24 requests, 29 aserciones |
 
 ## Variables de entorno
 
@@ -280,6 +283,7 @@ Los scripts de `infra/` usan el perfil `dce1` (`~/.aws/dce1-env.sh`) y guardan l
 | `ssh-mi-ip.sh` | Autoriza SSH desde tu IP actual (cuando cambias de red) |
 | `get-token.sh` | Obtiene un access token recorriendo el flujo Authorization Code + PKCE del Hosted UI |
 | `smoke-test.sh` | Evidencia end-to-end: cada ruta sin token, con token alterado, como CLIENTE y como ADMIN |
+| `carga-colas.sh` | Pruebas de carga de la mensajería: `perftest`, `api` o `dlq` (ver la sección Pruebas) |
 
 Las credenciales del lab expiran cada ~4 horas; al reiniciar el lab hay que volver a pegarlas en `~/.aws/credentials_aws_dce1`. La EC2 y RDS se detienen junto con el lab; la Elastic IP mantiene válidas las integraciones de API Gateway y los servicios arrancan solos con systemd al encender la instancia.
 
