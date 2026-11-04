@@ -1,0 +1,60 @@
+server:
+  port: ${PORT:8084}
+
+spring:
+  application:
+    name: ms-notificaciones
+  # Local: H2 en memoria. En AWS: DB_URL/DB_USER/DB_PASSWORD apuntan a la base "mensajeria" de la RDS.
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:mensajeria;DB_CLOSE_DELAY=-1}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+    open-in-view: false
+  # Clúster RabbitMQ: si un nodo cae, el cliente se reconecta al otro.
+  rabbitmq:
+    addresses: ${RABBIT_ADDRESSES:localhost:5672}
+    username: ${MQ_USER:guest}
+    password: ${MQ_PASSWORD:guest}
+    connection-timeout: 5s
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+# Todos los nombres de mensajería en un solo lugar (ver MensajeriaProperties). Las colas, exchanges y
+# bindings se declaran en RabbitConfig a partir de estos valores; ninguna otra clase los escribe a mano.
+mensajeria:
+  exchanges:
+    eventos: pedidos.eventos        # topic: hechos de negocio
+    comandos: pedidos.comandos      # direct: trabajos puntuales
+    dlx: pedidos.dlx                # direct: destino de los mensajes que no se pudieron procesar
+  colas:
+    notificaciones:
+      nombre: notificaciones.pedidos
+      routing-keys: [ "pedido.#", "pago.#" ]
+    comprobantes:
+      nombre: comprobantes.generar
+      routing-keys: [ "comprobante.generar" ]
+    auditoria:
+      nombre: auditoria.eventos
+      routing-keys: [ "#" ]
+  # Sufijo de la DLQ de cada cola (notificaciones.pedidos.dlq). También es su routing key en el DLX.
+  sufijo-dlq: .dlq
+  # Intentos de un mensaje con error recuperable antes de mandarlo a la DLQ.
+  max-intentos: 3
+  # Mensajes que un consumidor recibe sin haber confirmado (control de flujo).
+  prefetch: 10
+  # Solo para la demostración: permite forzar un error recuperable con el header x-simular-fallo.
+  simular-fallos: ${SIMULAR_FALLOS:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

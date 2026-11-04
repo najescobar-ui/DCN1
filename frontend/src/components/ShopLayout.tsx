@@ -69,6 +69,7 @@ export function ShopLayout() {
                 </div>
               </div>
               <Link to="/pedidos">Mis pedidos</Link>
+              <Link to="/notificaciones">Notificaciones</Link>
               {session.isAdmin && <Link to="/admin">Panel de administración</Link>}
               <Link to="/perfil">Mi token</Link>
               <button type="button" onClick={session.logout}>

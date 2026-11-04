@@ -14,6 +14,8 @@ import { ProductoPage } from './pages/ProductoPage'
 const CarritoPage = lazy(() => import('./pages/CarritoPage').then((m) => ({ default: m.CarritoPage })))
 const PerfilPage = lazy(() => import('./pages/PerfilPage').then((m) => ({ default: m.PerfilPage })))
 const AdminPedidosPage = lazy(() => import('./pages/admin/AdminPedidosPage').then((m) => ({ default: m.AdminPedidosPage })))
+const AdminMensajeriaPage = lazy(() => import('./pages/admin/AdminMensajeriaPage').then((m) => ({ default: m.AdminMensajeriaPage })))
+const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage').then((m) => ({ default: m.NotificacionesPage })))
 const AdminProductosPage = lazy(() => import('./pages/admin/AdminProductosPage').then((m) => ({ default: m.AdminProductosPage })))
 
 export default function App() {
@@ -41,6 +43,7 @@ export default function App() {
           }
         />
         <Route path="pedidos" element={<PedidosPage />} />
+        <Route path="notificaciones" element={<NotificacionesPage />} />
         <Route path="perfil" element={<PerfilPage />} />
         <Route path="no-autorizado" element={<NoAutorizadoPage />} />
       </Route>
@@ -55,6 +58,7 @@ export default function App() {
       >
         <Route index element={<AdminPedidosPage />} />
         <Route path="productos" element={<AdminProductosPage />} />
+        <Route path="mensajeria" element={<AdminMensajeriaPage />} />
         <Route path="token" element={<PerfilPage />} />
       </Route>
 

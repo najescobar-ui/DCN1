@@ -22,7 +22,17 @@ if [ "$estado" = stopped ]; then
   aws ec2 wait instance-running --instance-ids "$EC2_INSTANCE_ID"
 fi
 
-log "Servicios (systemd los arranca solos al encender la EC2)"
+log "EC2 de mensajería (RabbitMQ)"
+if [ -n "${MQ_INSTANCE_ID:-}" ]; then
+  estado=$(aws ec2 describe-instances --instance-ids "$MQ_INSTANCE_ID" --query 'Reservations[0].Instances[0].State.Name' --output text)
+  echo "estado: $estado"
+  if [ "$estado" = stopped ]; then
+    aws ec2 start-instances --instance-ids "$MQ_INSTANCE_ID" >/dev/null
+    aws ec2 wait instance-running --instance-ids "$MQ_INSTANCE_ID"
+  fi
+fi
+
+log "Servicios (systemd y docker los arrancan solos al encender las EC2)"
 for i in $(seq 1 40); do
   arriba=0
   for p in 8080 8081 8082; do
@@ -32,3 +42,10 @@ for i in $(seq 1 40); do
   sleep 5
 done
 for p in 8080 8081 8082; do echo "$p: $(curl -s -m 3 "http://$EC2_IP:$p/actuator/health" || echo 'sin respuesta')"; done
+if [ -n "${MQ_IP:-}" ]; then
+  for i in $(seq 1 40); do
+    curl -sf -m 3 "http://$MQ_IP:8083/actuator/health" >/dev/null && curl -sf -m 3 "http://$MQ_IP:8084/actuator/health" >/dev/null && break
+    sleep 5
+  done
+  for p in 8083 8084; do echo "$p: $(curl -s -m 3 "http://$MQ_IP:$p/actuator/health" || echo 'sin respuesta')"; done
+fi

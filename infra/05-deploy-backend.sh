@@ -26,6 +26,9 @@ PRODUCTOS_URL=http://localhost:8081
 PEDIDOS_URL=http://localhost:8082
 FRONTEND_ORIGINS=$FRONTEND_URL,https://preview.$AMPLIFY_APP_ID.amplifyapp.com,http://localhost:4200
 WEBPAY_RETURN_URL=$API_URL/api/pagos/webpay/retorno
+RABBIT_ADDRESSES=${MQ_PRIVATE_IP:-localhost}:5672,${MQ_PRIVATE_IP:-localhost}:5673
+MQ_USER=${MQ_USER:-guest}
+MQ_PASSWORD=${MQ_PASSWORD:-guest}
 ENV
 
 log "Build + deploy"

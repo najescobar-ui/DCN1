@@ -1,0 +1,51 @@
+server:
+  port: ${PORT:8083}
+
+spring:
+  application:
+    name: ms-mensajeria-admin
+  rabbitmq:
+    addresses: ${RABBIT_ADDRESSES:localhost:5672}
+    username: ${MQ_USER:guest}
+    password: ${MQ_PASSWORD:guest}
+    connection-timeout: 5s
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+mensajeria:
+  admin:
+    # API HTTP de management de RabbitMQ (listar colas con sus contadores, exchanges, bindings y nodos).
+    management-url: ${RABBIT_MANAGEMENT_URL:http://localhost:15672}
+    vhost: /
+    # Sufijo con que se nombra la DLQ de una cola creada con conDlq=true, y el DLX que la alimenta.
+    sufijo-dlq: .dlq
+    dlx: pedidos.dlx
+    # Topología de la que depende el sistema: se puede ver y purgar, pero no eliminar desde la API.
+    protegidos:
+      - pedidos.eventos
+      - pedidos.comandos
+      - pedidos.dlx
+      - notificaciones.pedidos
+      - notificaciones.pedidos.dlq
+      - comprobantes.generar
+      - comprobantes.generar.dlq
+      - auditoria.eventos
+      - auditoria.eventos.dlq
+    # Prefijo reservado por RabbitMQ (amq.direct, amq.topic, ...).
+    prefijo-reservado: amq.
+    # Máximo de mensajes que mueve una operación de reproceso de DLQ.
+    max-reproceso: 500
+    # Headers de demostración (ver ms-notificaciones) que se quitan al reprocesar una DLQ.
+    headers-demo:
+      - x-simular-fallo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
