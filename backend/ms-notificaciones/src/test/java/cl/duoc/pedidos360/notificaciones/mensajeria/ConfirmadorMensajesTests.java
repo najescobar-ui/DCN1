@@ -35,7 +35,9 @@ class ConfirmadorMensajesTests {
                     new MensajeriaProperties.Cola("notificaciones.pedidos", List.of("pedido.#")),
                     new MensajeriaProperties.Cola("comprobantes.generar", List.of("comprobante.generar")),
                     new MensajeriaProperties.Cola("auditoria.eventos", List.of("#"))),
-            ".dlq", 3, 10, true);
+            ".dlq", 3, 10, true,
+            new MensajeriaProperties.Retencion(new MensajeriaProperties.Limites(86_400_000, 10_000),
+                    new MensajeriaProperties.Limites(604_800_000, 1_000)));
     private final ConfirmadorMensajes confirmador = new ConfirmadorMensajes(JsonMapper.builder().build(), props);
     private final Channel canal = mock(Channel.class);
 
@@ -98,7 +100,8 @@ class ConfirmadorMensajesTests {
 
     @Test
     void sinSimulacionHabilitadaElHeaderSeIgnora() throws Exception {
-        MensajeriaProperties sinDemo = new MensajeriaProperties(props.exchanges(), props.colas(), ".dlq", 3, 10, false);
+        MensajeriaProperties sinDemo = new MensajeriaProperties(props.exchanges(), props.colas(), ".dlq", 3, 10, false,
+                props.retencion());
         new ConfirmadorMensajes(JsonMapper.builder().build(), sinDemo)
                 .procesar("test", mensaje(JSON_OK, null, "transitorio"), canal, e -> { });
         verify(canal).basicAck(TAG, false);

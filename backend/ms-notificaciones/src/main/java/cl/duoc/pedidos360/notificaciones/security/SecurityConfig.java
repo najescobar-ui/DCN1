@@ -23,6 +23,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**").permitAll()
+                        // Mensajes no entregados: mismo scope que la administración de RabbitMQ (y rol ADMIN en el controller).
+                        .requestMatchers("/api/mensajes-fallidos/**").hasAuthority("SCOPE_pedidos360/mensajeria.admin")
                         .requestMatchers(HttpMethod.GET, "/api/**").hasAuthority("SCOPE_pedidos360/pedidos.read")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

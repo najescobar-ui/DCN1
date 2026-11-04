@@ -2,6 +2,8 @@
 # Despliega deploy/mensajeria en la EC2 de mensajería: compila los dos microservicios, copia el compose,
 # escribe el .env y la cookie de Erlang (fuera de git) y ejecuta docker compose up.
 # SOLO_RABBIT=1 levanta únicamente los dos nodos RabbitMQ (sin compilar Java).
+# RECREAR_COLAS=1 borra las 6 colas antes de levantar ms-notificaciones, que las vuelve a declarar. Hace falta
+# cuando cambian sus argumentos (TTL, largo máximo, DLX): RabbitMQ no permite redeclarar una cola con otros.
 source "$(dirname "$0")/lib.sh"
 export JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home}
 ROOT="$INFRA_DIR/.."
@@ -50,6 +52,15 @@ ENV
 # RabbitMQ exige que pertenezca a su usuario (uid 999) y que nadie más pueda leerla.
 "${SSH[@]}" "sudo sh -c 'printf %s $MQ_ERLANG_COOKIE > /opt/pedidos360-mq/secrets/erlang.cookie && \
   chown 999:999 /opt/pedidos360-mq/secrets/erlang.cookie && chmod 400 /opt/pedidos360-mq/secrets/erlang.cookie'"
+
+if [ "${RECREAR_COLAS:-0}" = 1 ]; then
+  log "Recreando las colas (se pierden los mensajes que tengan)"
+  "${SSH[@]}" 'cd /opt/pedidos360-mq && docker compose stop ms-notificaciones >/dev/null 2>&1; \
+    for q in notificaciones.pedidos comprobantes.generar auditoria.eventos; do \
+      docker exec pedidos360-mq-rabbit1-1 rabbitmqctl -q delete_queue "$q" || true; \
+      docker exec pedidos360-mq-rabbit1-1 rabbitmqctl -q delete_queue "$q.dlq" || true; \
+    done'
+fi
 
 log "docker compose up"
 if [ "${SOLO_RABBIT:-0}" = 1 ]; then

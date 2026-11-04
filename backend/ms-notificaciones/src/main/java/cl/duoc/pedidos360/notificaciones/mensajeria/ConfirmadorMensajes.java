@@ -34,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class ConfirmadorMensajes {
 
     private static final Logger log = LoggerFactory.getLogger(ConfirmadorMensajes.class);
-    static final String HEADER_SIMULAR_FALLO = "x-simular-fallo";
+    public static final String HEADER_SIMULAR_FALLO = "x-simular-fallo";
 
     private final JsonMapper jsonMapper;
     private final MensajeriaProperties props;

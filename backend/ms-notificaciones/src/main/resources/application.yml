@@ -44,6 +44,14 @@ mensajeria:
     auditoria:
       nombre: auditoria.eventos
       routing-keys: [ "#" ]
+  # Retención y limpieza de las colas (argumentos x-message-ttl, x-max-length y x-overflow).
+  retencion:
+    principal:
+      ttl-ms: 86400000        # 24 h: un mensaje que nadie consumió vence y pasa a la DLQ (motivo expired)
+      max-mensajes: 10000     # al llenarse se descarta el más antiguo (drop-head) y también pasa a la DLQ
+    dlq:
+      ttl-ms: 604800000       # 7 días: limpieza de lo que quede en una DLQ (sin DLX: se elimina)
+      max-mensajes: 1000
   # Sufijo de la DLQ de cada cola (notificaciones.pedidos.dlq). También es su routing key en el DLX.
   sufijo-dlq: .dlq
   # Intentos de un mensaje con error recuperable antes de mandarlo a la DLQ.

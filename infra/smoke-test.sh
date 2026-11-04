@@ -88,6 +88,8 @@ check 200 admin     GET  /api/mensajeria/cluster "$MQ_ADMIN"
 check 200 admin     GET  /api/mensajeria/queues/notificaciones.pedidos "$MQ_ADMIN"
 check 400 admin     POST /api/mensajeria/queues "$MQ_ADMIN" '{"nombre":"","tipo":"QUORUM"}'
 check 409 admin     DELETE /api/mensajeria/queues/notificaciones.pedidos "$MQ_ADMIN"
+check 200 admin     GET  /api/mensajes-fallidos "$MQ_ADMIN"
+check 403 cliente   GET  /api/mensajes-fallidos "$MQ_CLIENTE"
 check 200 cliente   GET  /api/notificaciones "$CLIENTE"
 check 200 admin     GET  /api/auditoria "$ADMIN"
 
