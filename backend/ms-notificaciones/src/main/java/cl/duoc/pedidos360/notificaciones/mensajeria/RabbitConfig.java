@@ -27,7 +27,8 @@ import org.springframework.context.annotation.Configuration;
  *  pedidos.eventos  (topic)  --#----------------------> auditoria.eventos      --rechazo--> pedidos.dlx --> auditoria.eventos.dlq
  * </pre>
  * Las colas son quorum (replicadas en los dos nodos del clúster). Cada una tiene su DLQ: un mensaje llega
- * ahí cuando el consumidor lo rechaza sin reencolar (basicNack con requeue=false).
+ * ahí cuando el consumidor lo rechaza sin reencolar (basicNack con requeue=false), cuando vence su TTL o
+ * cuando la cola supera su largo máximo. Cada DLQ tiene su propio listener que registra el mensaje.
  */
 @Configuration
 @EnableConfigurationProperties(MensajeriaProperties.class)
@@ -68,7 +69,7 @@ public class RabbitConfig {
 
     @Bean
     Queue dlqNotificaciones() {
-        return QueueBuilder.durable(props.dlqDe(props.colas().notificaciones())).quorum().build();
+        return dlq(props.colas().notificaciones());
     }
 
     /** Una cola puede tener varios bindings: aquí uno por cada patrón (pedido.# y pago.#). */
@@ -93,7 +94,7 @@ public class RabbitConfig {
 
     @Bean
     Queue dlqComprobantes() {
-        return QueueBuilder.durable(props.dlqDe(props.colas().comprobantes())).quorum().build();
+        return dlq(props.colas().comprobantes());
     }
 
     @Bean
@@ -116,7 +117,7 @@ public class RabbitConfig {
 
     @Bean
     Queue dlqAuditoria() {
-        return QueueBuilder.durable(props.dlqDe(props.colas().auditoria())).quorum().build();
+        return dlq(props.colas().auditoria());
     }
 
     @Bean
@@ -157,6 +158,24 @@ public class RabbitConfig {
                 .deadLetterExchange(props.exchanges().dlx())
                 .deadLetterRoutingKey(props.dlqDe(cola))
                 .deliveryLimit(props.maxIntentos() + 2)
+                .ttl(props.retencion().principal().ttlMs())
+                .maxLength(props.retencion().principal().maxMensajes())
+                .overflow(QueueBuilder.Overflow.dropHead)
+                .build();
+    }
+
+    /**
+     * DLQ de una cola: quorum, sin DLX propio. Su listener registra y confirma cada mensaje; el TTL y el largo
+     * máximo limpian lo que quede si el listener está detenido. El delivery-limit evita un bucle si el
+     * registro falla de forma permanente.
+     */
+    private Queue dlq(MensajeriaProperties.Cola cola) {
+        return QueueBuilder.durable(props.dlqDe(cola))
+                .quorum()
+                .deliveryLimit(props.maxIntentos() + 2)
+                .ttl(props.retencion().dlq().ttlMs())
+                .maxLength(props.retencion().dlq().maxMensajes())
+                .overflow(QueueBuilder.Overflow.dropHead)
                 .build();
     }
 }

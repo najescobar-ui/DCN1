@@ -15,7 +15,8 @@ public record MensajeriaProperties(
         String sufijoDlq,
         int maxIntentos,
         int prefetch,
-        boolean simularFallos) {
+        boolean simularFallos,
+        Retencion retencion) {
 
     /**
      * @param eventos  exchange topic con los hechos de negocio que publica ms-pedidos
@@ -33,6 +34,22 @@ public record MensajeriaProperties(
      * @param routingKeys claves (o patrones, en un topic) con que la cola se enlaza a su exchange
      */
     public record Cola(String nombre, List<String> routingKeys) {
+    }
+
+    /**
+     * Políticas de retención y limpieza.
+     *
+     * @param principal límites de las colas de trabajo (lo que vence o desborda pasa a su DLQ)
+     * @param dlq       límites de las DLQ (lo que vence o desborda se elimina)
+     */
+    public record Retencion(Limites principal, Limites dlq) {
+    }
+
+    /**
+     * @param ttlMs       vida máxima de un mensaje en la cola (x-message-ttl)
+     * @param maxMensajes largo máximo de la cola (x-max-length, descartando el más antiguo)
+     */
+    public record Limites(int ttlMs, int maxMensajes) {
     }
 
     /** Nombre de la DLQ de una cola; también es la routing key con que el DLX la alcanza. */

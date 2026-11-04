@@ -195,3 +195,19 @@ export interface RegistroAuditoria {
   clienteUsername?: string | null
   recibidoEn: string
 }
+
+/** Mensaje no entregado que registró el listener de una DLQ (ms-notificaciones). */
+export interface MensajeFallido {
+  id: number
+  dlq: string
+  colaOrigen?: string | null
+  /** rejected (NACK), expired (TTL), maxlen (largo máximo) o delivery_limit */
+  motivo?: string | null
+  veces: number
+  exchangeOrigen?: string | null
+  routingKeyOrigen?: string | null
+  messageId?: string | null
+  cuerpo?: string | null
+  recibidoEn: string
+  reprocesadoEn?: string | null
+}

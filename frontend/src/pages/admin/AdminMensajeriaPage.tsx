@@ -12,6 +12,7 @@ import type {
   ClusterInfo,
   ColaInfo,
   ExchangeInfo,
+  MensajeFallido,
   RegistroAuditoria,
   TipoCola,
   TipoExchange,
@@ -36,7 +37,7 @@ const PRUEBAS = {
   invalido: {
     titulo: "Mensaje inválido",
     detalle:
-      "JSON ilegible al exchange direct: NACK sin reencolar, directo a comprobantes.generar.dlq.",
+      "JSON ilegible al exchange direct: NACK sin reencolar a comprobantes.generar.dlq; su listener lo registra.",
     exchange: "pedidos.comandos",
     routingKey: "comprobante.generar",
     headers: undefined as Record<string, string> | undefined,
@@ -44,7 +45,7 @@ const PRUEBAS = {
   transitorio: {
     titulo: "Fallo transitorio",
     detalle:
-      'Simula una caída: NACK con reencolado 3 veces y luego DLQ. Se recupera con "Reprocesar".',
+      'Simula una caída: NACK con reencolado 3 veces y luego DLQ. Se recupera con "Reprocesar" en No entregados.',
     exchange: "pedidos.comandos",
     routingKey: "comprobante.generar",
     headers: { "x-simular-fallo": "bd-caida" } as
@@ -86,6 +87,7 @@ export function AdminMensajeriaPage() {
   const [exchanges, setExchanges] = useState<ExchangeInfo[]>([]);
   const [bindings, setBindings] = useState<BindingInfo[]>([]);
   const [auditoria, setAuditoria] = useState<RegistroAuditoria[]>([]);
+  const [fallidos, setFallidos] = useState<MensajeFallido[]>([]);
 
   const cargar = useCallback(() => {
     api.mq.cluster().then(setCluster, () => undefined);
@@ -96,6 +98,7 @@ export function AdminMensajeriaPage() {
       (a) => setAuditoria(a.slice(0, 15)),
       () => undefined,
     );
+    api.fallidos().then(setFallidos, () => undefined);
   }, []);
 
   useEffect(() => {
@@ -106,16 +109,14 @@ export function AdminMensajeriaPage() {
         (a) => setAuditoria(a.slice(0, 15)),
         () => undefined,
       );
+      api.fallidos().then(setFallidos, () => undefined);
     }, REFRESCO_MS);
     return () => window.clearInterval(timer);
   }, [cargar]);
 
-  const enDlq = useMemo(
-    () =>
-      colas
-        .filter((c) => c.nombre.endsWith(SUFIJO_DLQ))
-        .reduce((total, c) => total + c.mensajes, 0),
-    [colas],
+  const pendientes = useMemo(
+    () => fallidos.filter((f) => !f.reprocesadoEn).length,
+    [fallidos],
   );
   const nodosActivos = cluster?.nodos.filter((n) => n.activo).length ?? 0;
 
@@ -223,6 +224,15 @@ export function AdminMensajeriaPage() {
       // El interceptor ya mostró el error.
     }
   };
+  const reprocesarFallido = async (f: MensajeFallido) => {
+    try {
+      await api.reprocesarFallido(f.id);
+      notify.ok(`Mensaje #${f.id} reenviado a ${f.exchangeOrigen}`);
+      window.setTimeout(cargar, 1500);
+    } catch {
+      // El interceptor ya mostró el error.
+    }
+  };
   const probar = async (clave: keyof typeof PRUEBAS) => {
     const p = PRUEBAS[clave];
     const cuerpo =
@@ -277,9 +287,11 @@ export function AdminMensajeriaPage() {
           </span>
         </div>
         <div className="card kpi">
-          <span className="muted">Mensajes en DLQ</span>
-          <strong className={enDlq > 0 ? "accent" : undefined}>{enDlq}</strong>
-          <span className="faint">rechazados por los consumidores</span>
+          <span className="muted">No entregados</span>
+          <strong className={pendientes > 0 ? "accent" : undefined}>
+            {pendientes}
+          </strong>
+          <span className="faint">registrados por los listeners de DLQ</span>
         </div>
       </section>
 
@@ -697,6 +709,86 @@ export function AdminMensajeriaPage() {
             </div>
           </form>
         </section>
+      </div>
+
+      <h2 className="d" style={{ fontSize: 22, margin: "8px 0 12px" }}>
+        Mensajes no entregados
+      </h2>
+      <p className="muted" style={{ margin: "0 0 12px" }}>
+        Cada DLQ tiene un listener que registra en el log y aquí lo que no se
+        pudo procesar: rechazado (NACK), vencido por TTL o descartado por largo
+        máximo.
+      </p>
+      <div className="table-wrap" style={{ marginBottom: 24 }}>
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Recibido</th>
+              <th>DLQ</th>
+              <th>Motivo</th>
+              <th>Origen</th>
+              <th>Cuerpo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {fallidos.slice(0, 20).map((f) => (
+              <tr key={f.id}>
+                <td
+                  className="muted"
+                  style={{ fontSize: 13, whiteSpace: "nowrap" }}
+                >
+                  {fecha(f.recibidoEn)}
+                </td>
+                <td className="m" style={{ fontSize: 12 }}>
+                  {f.dlq}
+                </td>
+                <td className="accent" style={{ fontSize: 13 }}>
+                  {f.motivo ?? "—"}
+                  {f.veces > 1 ? ` ×${f.veces}` : ""}
+                </td>
+                <td className="m muted" style={{ fontSize: 12 }}>
+                  {f.exchangeOrigen} [{f.routingKeyOrigen}]
+                </td>
+                <td
+                  className="m muted"
+                  style={{
+                    fontSize: 12,
+                    maxWidth: 260,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={f.cuerpo ?? ""}
+                >
+                  {f.cuerpo}
+                </td>
+                <td style={{ textAlign: "right" }}>
+                  {f.reprocesadoEn ? (
+                    <span className="faint" style={{ fontSize: 13 }}>
+                      reprocesado
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => reprocesarFallido(f)}
+                    >
+                      Reprocesar
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {fallidos.length === 0 && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  Sin mensajes no entregados.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <h2 className="d" style={{ fontSize: 22, margin: "8px 0 12px" }}>

@@ -103,6 +103,9 @@ route "GET /api/mensajeria/bindings"                    mensajeria "$MQ_SCOPE"
 route "POST /api/mensajeria/bindings"                   mensajeria "$MQ_SCOPE"
 route "DELETE /api/mensajeria/bindings"                 mensajeria "$MQ_SCOPE"
 route "POST /api/mensajeria/messages"                   mensajeria "$MQ_SCOPE"
+# Mensajes no entregados que registraron los listeners de las DLQ (ms-notificaciones; exige ADMIN).
+route "GET /api/mensajes-fallidos"                      notificaciones "$MQ_SCOPE"
+route "POST /api/mensajes-fallidos/{id}/reprocesar"     notificaciones "$MQ_SCOPE"
 # Webpay sends the customer's browser back here (GET or form POST) without a bearer token;
 # ms-pedidos validates the transaction token directly with Transbank.
 route "GET /api/pagos/webpay/retorno"     pedidos   PUBLIC

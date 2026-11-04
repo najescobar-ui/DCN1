@@ -49,7 +49,7 @@ El detalle del login está en [`docs/flujo-login-pkce.png`](docs/flujo-login-pkc
 | `pedidos.eventos` | topic | `pedido.#`, `pago.#` | `notificaciones.pedidos` | `consumer/notificaciones`: aviso al cliente |
 | `pedidos.comandos` | direct | `comprobante.generar` | `comprobantes.generar` | `consumer/comprobantes`: emite el comprobante de un pedido pagado |
 | `pedidos.eventos` | topic | `#` | `auditoria.eventos` | `consumer/auditoria`: bitácora de todos los eventos |
-| `pedidos.dlx` | direct | `<cola>.dlq` | `notificaciones.pedidos.dlq`, `comprobantes.generar.dlq`, `auditoria.eventos.dlq` | (se inspeccionan y reprocesan desde el administrador) |
+| `pedidos.dlx` | direct | `<cola>.dlq` | `notificaciones.pedidos.dlq`, `comprobantes.generar.dlq`, `auditoria.eventos.dlq` | listener de DLQ en cada dominio: registra el mensaje no entregado en el log y en la tabla `mensaje_fallido` |
 
 Routing keys publicadas: `pedido.creado`, `pedido.estado.<estado>` (confirmado, despachado, entregado, cancelado), `pago.aprobado`, `pago.rechazado` y el comando `comprobante.generar`.
 
@@ -61,6 +61,16 @@ Routing keys publicadas: `pedido.creado`, `pedido.estado.<estado>` (confirmado, 
   - mensaje inválido (JSON ilegible o sin datos obligatorios) → `basicNack(requeue=false)`: directo a la DLQ, no se reintenta;
   - error recuperable → `basicNack(requeue=true)` hasta 3 intentos (contados con el header `x-delivery-count`) y después a la DLQ;
   - cada decisión queda en el log con la cola, el intento y el motivo. Los consumidores son idempotentes (por `eventoId` o por pedido).
+- **Listeners de DLQ:** cada consumidor de dominio tiene un segundo `@RabbitListener` sobre su DLQ. `RegistradorDlq` escribe en el log y guarda en `mensaje_fallido` la cola de origen, el motivo que informa RabbitMQ en `x-death` (`rejected`, `expired`, `maxlen` o `delivery_limit`), el exchange, la routing key y el cuerpo, y confirma con ACK. Desde Admin → Mensajería (o `POST /api/mensajes-fallidos/{id}/reprocesar`) se reenvía a su exchange de origen.
+- **Retención y limpieza** (`mensajeria.retencion` en `application.yml`):
+
+  | Colas | TTL (`x-message-ttl`) | Largo máximo (`x-max-length`, `drop-head`) | Qué pasa con lo que vence o desborda |
+  |---|---|---|---|
+  | Principales | 24 h | 10.000 | Pasa a su DLQ y su listener lo registra |
+  | DLQ | 7 días | 1.000 | Se elimina (las DLQ no tienen DLX) |
+
+  Para demostrar la expiración, el administrador crea una cola con TTL corto y su DLQ (`"ttlMs": 5000, "conDlq": true`): un mensaje sin consumidor pasa solo a la DLQ al vencer.
+- **Métricas de monitoreo** (Management UI y Admin → Mensajería): colas activas, mensajes listos y sin confirmar (pendientes), consumidores por cola, tasas de publicación, entrega y ACK, y mensajes no entregados.
 - **Administrador** (`ms-mensajeria-admin`): API REST sobre `RabbitAdminService`, que usa `RabbitAdmin` para escribir y la API de management para leer contadores. Valida la entrada con DTO y Bean Validation (nombres, tipos, TTL, límites y combinaciones inválidas como `limiteEntregas` en una cola clásica) y protege la topología del sistema (409).
 - **Clúster:** `deploy/mensajeria/docker-compose.yml` levanta `rabbit1` y `rabbit2` con la misma cookie de Erlang y *peer discovery* clásico, más los dos microservicios de mensajería.
 
@@ -129,6 +139,8 @@ Scopes del resource server `pedidos360`: `productos.read`, `productos.write`, `p
 | GET, DELETE | `/api/mensajeria/exchanges/{nombre}` | ms-mensajeria-admin | mensajeria.admin | ADMIN |
 | GET, POST, DELETE | `/api/mensajeria/bindings` | ms-mensajeria-admin | mensajeria.admin | ADMIN (el DELETE recibe exchange, cola y routing key en el cuerpo) |
 | POST | `/api/mensajeria/messages` | ms-mensajeria-admin | mensajeria.admin | ADMIN (mensaje de prueba) |
+| GET | `/api/mensajes-fallidos` | ms-notificaciones | mensajeria.admin | ADMIN (mensajes no entregados registrados por los listeners de DLQ) |
+| POST | `/api/mensajes-fallidos/{id}/reprocesar` | ms-notificaciones | mensajeria.admin | ADMIN (reenvía al exchange de origen; 409 si ya se reprocesó) |
 
 **Estados del pedido:** `PENDIENTE` (Recibido) → `CONFIRMADO` (En preparación) → `DESPACHADO` (En camino) → `ENTREGADO`. Solo se avanza al siguiente estado; se puede pasar a `CANCELADO` desde Recibido o En preparación. Cada cliente tiene como máximo **un pedido en curso**: puede hacer otro cuando se entregue o se cancele. El cliente puede cancelar mientras el pedido está Recibido y sin pagar. Un pedido en efectivo queda pagado al marcarse como entregado. Cualquier otro cambio responde 409.
 
@@ -155,7 +167,7 @@ Respuestas de error: 400 validación, 401 token ausente o inválido, 403 sin rol
 | `/perfil` | autenticado | Claims de los tokens y pruebas contra la API (token válido, sin token, token alterado) |
 | `/admin` | ADMIN | Gestión de pedidos y pagos (indicadores desde el BFF), tabla ordenable y paginada |
 | `/admin/productos` | ADMIN | Mantenedor del catálogo, tabla ordenable y paginada |
-| `/admin/mensajeria` | ADMIN | Clúster RabbitMQ: nodos, colas con contadores y DLQ, exchanges, bindings, pruebas de rutas (válido, inválido, fallo transitorio) y auditoría |
+| `/admin/mensajeria` | ADMIN | Clúster RabbitMQ: nodos, colas con contadores y DLQ, exchanges, bindings, pruebas de rutas (válido, inválido, fallo transitorio), mensajes no entregados con reproceso y auditoría |
 | `/notificaciones` | autenticado | Avisos y comprobantes generados por los consumidores |
 
 ## Estructura
@@ -193,6 +205,8 @@ Cada servicio del backend sigue la misma estructura por capas: `controller`, `se
 | EP3 · Mensajería separada de la lógica de negocio | `PedidoService` emite eventos de Spring; `PublicadorEventosRabbit` y `RabbitConfig` en el paquete `mensajeria` |
 | EP3 · `@RabbitListener` agrupados por dominio | `ms-notificaciones/.../consumer/{notificaciones,comprobantes,auditoria}` |
 | EP3 · ACK manual, reintentos, NACK y DLQ con logs | `ConfirmadorMensajes.java` (y sus pruebas `ConfirmadorMensajesTests`) |
+| EP3 · Listener de cada DLQ con registro en logs | `recibirDlq` en cada `consumer/*`, `RegistradorDlq.java`, `fallido/MensajeFallidoService.java` |
+| EP3 · Políticas de retención y limpieza | `mensajeria.retencion` en `application.yml` y `colaConDlq` / `dlq` en `RabbitConfig.java` |
 | EP3 · API REST del administrador | `ms-mensajeria-admin/.../controller/` |
 | EP3 · Lógica encapsulada en `RabbitAdminService` | `ms-mensajeria-admin/.../service/RabbitAdminService.java` |
 | EP3 · Validación de la entrada | `ms-mensajeria-admin/.../dto/` (Bean Validation) y `GlobalExceptionHandler` |
@@ -225,12 +239,12 @@ El frontend usa por defecto la API de AWS (`frontend/.env.development`). Como el
 
 | Qué | Cómo | Cantidad |
 |---|---|---|
-| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ y la validación del administrador) | 96 |
+| Backend | `./mvnw test` en cada servicio (MockMvc con tokens simulados: 200, 201, 400, 401, 403, 404, 409, 422, pagos con Webpay simulado, transiciones de estado, un pedido en curso por cliente, routing keys del productor, cada camino de ACK/NACK/DLQ, el registro y reproceso de mensajes no entregados y la validación del administrador) | 101 |
 | Frontend | `npm test` en `frontend/` (Vitest) | 28 |
-| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo, más la mensajería | 38 verificaciones |
+| End-to-end contra AWS | `infra/smoke-test.sh`: obtiene tokens reales con PKCE y prueba cada ruta sin token, con token alterado, como CLIENTE y como ADMIN, y recorre el ciclo del pedido hasta entregarlo, más la mensajería | 40 verificaciones |
 | Carga de RabbitMQ | `infra/carga-colas.sh perftest`: PerfTest (herramienta oficial de RabbitMQ) en la EC2 de mensajería, 2 productores y 2 consumidores sobre una cola quorum de prueba conectada a los dos nodos | ~600 msg/s confirmados, latencia mediana ~6 ms |
 | Carga por API Gateway | `infra/carga-colas.sh api 200 10`: crea con la API un exchange, una cola con DLQ y su binding, publica 200 mensajes en paralelo con JWT y elimina todo al final. `infra/carga-colas.sh dlq 20` llena las DLQ reales con mensajes inválidos | 200/200 aceptados |
-| Postman | `tools/postman/Pedidos360-Mensajeria.postman_collection.json`: login con PKCE desde la pestaña Authorization, topología de prueba, validaciones (400/401/409), carga con el Collection Runner y limpieza | 24 requests, 29 aserciones |
+| Postman | `tools/postman/Pedidos360-Mensajeria.postman_collection.json`: login con PKCE desde la pestaña Authorization, topología de prueba, validaciones (400/401/409), carga con el Collection Runner y limpieza | 25 requests, 31 aserciones |
 
 ## Variables de entorno
 
