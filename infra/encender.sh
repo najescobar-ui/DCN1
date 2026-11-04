@@ -33,19 +33,22 @@ if [ -n "${MQ_INSTANCE_ID:-}" ]; then
 fi
 
 log "Servicios (systemd y docker los arrancan solos al encender las EC2)"
-for i in $(seq 1 40); do
-  arriba=0
-  for p in 8080 8081 8082; do
-    curl -sf -m 3 "http://$EC2_IP:$p/actuator/health" >/dev/null && arriba=$((arriba + 1))
-  done
-  [ "$arriba" -eq 3 ] && break
-  sleep 5
-done
-for p in 8080 8081 8082; do echo "$p: $(curl -s -m 3 "http://$EC2_IP:$p/actuator/health" || echo 'sin respuesta')"; done
-if [ -n "${MQ_IP:-}" ]; then
+# Solo el BFF (8080) está expuesto: el estado de cada microservicio se consulta dentro de su EC2 por SSH.
+ssh_en() { ssh -i "$KEY_FILE" -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR -o ConnectTimeout=5 "ec2-user@$1" "$2"; }
+salud() {  # host puertos...
+  local host=$1; shift
+  ssh_en "$host" "for p in $*; do echo \"\$p: \$(curl -s -m 3 localhost:\$p/actuator/health || echo sin respuesta)\"; done" 2>/dev/null
+}
+esperar() {  # host cantidad puertos...
+  local host=$1 n=$2; shift 2
   for i in $(seq 1 40); do
-    curl -sf -m 3 "http://$MQ_IP:8083/actuator/health" >/dev/null && curl -sf -m 3 "http://$MQ_IP:8084/actuator/health" >/dev/null && break
+    [ "$(salud "$host" "$@" | grep -c '"UP"')" -eq "$n" ] && return
     sleep 5
   done
-  for p in 8083 8084; do echo "$p: $(curl -s -m 3 "http://$MQ_IP:$p/actuator/health" || echo 'sin respuesta')"; done
+}
+esperar "$EC2_IP" 3 8080 8081 8082
+salud "$EC2_IP" 8080 8081 8082 || echo "sin SSH a la EC2 backend: infra/ssh-mi-ip.sh"
+if [ -n "${MQ_IP:-}" ]; then
+  esperar "$MQ_IP" 2 8083 8084
+  salud "$MQ_IP" 8083 8084 || echo "sin SSH a la EC2 de mensajería: infra/10-rabbitmq-ec2.sh"
 fi

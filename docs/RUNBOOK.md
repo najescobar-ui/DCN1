@@ -91,7 +91,7 @@ Al terminar cada sesión, el lab apaga la EC2 y RDS. Cognito, API Gateway y Ampl
 infra/encender.sh
 ```
 
-Enciende RDS y las dos EC2 (backend y mensajería) si están apagadas y espera a que los cinco servicios respondan `UP`. Los de la EC2 backend arrancan con systemd y los de mensajería con Docker (`restart: unless-stopped`); las IPs elásticas no cambian.
+Enciende RDS y las dos EC2 (backend y mensajería) si están apagadas y espera a que los cinco servicios respondan `UP`. Los de la EC2 backend arrancan con systemd y los de mensajería con Docker (`restart: unless-stopped`); las IPs elásticas no cambian. Como solo el BFF (8080) está expuesto, la salud de cada servicio se revisa por SSH dentro de cada EC2: si cambiaste de red, corre antes `infra/ssh-mi-ip.sh` e `infra/10-rabbitmq-ec2.sh`.
 
 ### 4.2 Verificar que todo funciona
 
@@ -287,7 +287,9 @@ La mayoría de los valores salen de `state.env` o de la cuenta, así que en otro
 |---|---|---|
 | `explicit deny ... voc-cancel-cred` | Venció la sesión del lab | Sección 2: nuevas credenciales |
 | La API responde 503, el catálogo no carga | EC2 o RDS apagadas | `infra/encender.sh` |
-| `05-deploy-backend.sh` se queda pegado en SSH | Cambió tu IP pública | `infra/ssh-mi-ip.sh` |
+| `05-deploy-backend.sh` o `encender.sh` se quedan pegados en SSH | Cambió tu IP pública | `infra/ssh-mi-ip.sh` (y `infra/10-rabbitmq-ec2.sh` para la EC2 de mensajería) |
+| La API responde 502 en `/api/notificaciones` o `/api/mensajeria/*` | El BFF no alcanza la EC2 de mensajería (apagada, o `NOTIFICACIONES_URL`/`MENSAJERIA_URL` con una IP privada vieja) | `infra/encender.sh`; si se recreó la EC2, `infra/05-deploy-backend.sh` |
+| `curl http://<EC2_IP>:8081` no responde | Es lo esperado: solo el BFF (8080) está expuesto | Probar dentro de la EC2: `curl localhost:8081/actuator/health` |
 | El sitio dice "No se pudo contactar la API (red o CORS)" en el preview o en local | CORS solo acepta producción | `CORS_DEV=1 infra/04-apigw.sh` |
 | Todas las llamadas dan 401 después de recrear Cognito | El frontend o el authorizer tienen el user pool anterior | `infra/04-apigw.sh`, `infra/05-deploy-backend.sh`, `infra/07-frontend-env.sh` y `06` |
 | `smoke-test.sh` falla al crear el pedido con 409 | `cliente1` tiene un pedido en curso que el script no pudo cerrar | Entregarlo o cancelarlo desde el panel de admin |
