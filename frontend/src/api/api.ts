@@ -10,6 +10,7 @@ import type {
   EstadoPago,
   EstadoPedido,
   ExchangeInfo,
+  MensajeFallido,
   Notificacion,
   Pedido,
   Producto,
@@ -48,6 +49,10 @@ export const api = {
   notificaciones: () => http.get<Notificacion[]>('/notificaciones').then((r) => r.data),
   comprobantes: () => http.get<Comprobante[]>('/comprobantes').then((r) => r.data),
   auditoria: () => http.get<RegistroAuditoria[]>('/auditoria').then((r) => r.data),
+  // Mensajes no entregados registrados por los listeners de las DLQ (solo ADMIN, scope mensajeria.admin).
+  fallidos: () => http.get<MensajeFallido[]>('/mensajes-fallidos').then((r) => r.data),
+  reprocesarFallido: (id: number) =>
+    http.post<MensajeFallido>(`/mensajes-fallidos/${id}/reprocesar`).then((r) => r.data),
 
   // Administración de RabbitMQ (ms-mensajeria-admin). Requiere scope mensajeria.admin y rol ADMIN.
   mq: {
