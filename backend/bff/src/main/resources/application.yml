@@ -17,6 +17,9 @@ app:
   pedidos-url: ${PEDIDOS_URL:http://localhost:8082}
   notificaciones-url: ${NOTIFICACIONES_URL:http://localhost:8084}
   mensajeria-url: ${MENSAJERIA_URL:http://localhost:8083}
+  # Microservicios de streaming (EC2 de Kafka).
+  analitica-url: ${ANALITICA_URL:http://localhost:8085}
+  streaming-url: ${STREAMING_URL:http://localhost:8086}
 
   # API Gateway entrega todas las rutas al BFF; el BFF valida el JWT, aplica la autorización por rol
   # (SecurityConfig) y reenvía cada petición al microservicio que corresponde según el prefijo de la ruta.
@@ -39,6 +42,10 @@ app:
         destino: ${app.notificaciones-url}
       - prefijo: /api/mensajeria
         destino: ${app.mensajeria-url}
+      - prefijo: /api/analitica
+        destino: ${app.analitica-url}
+      - prefijo: /api/streaming
+        destino: ${app.streaming-url}
 
 management:
   endpoints:
