@@ -15,6 +15,7 @@ const CarritoPage = lazy(() => import('./pages/CarritoPage').then((m) => ({ defa
 const PerfilPage = lazy(() => import('./pages/PerfilPage').then((m) => ({ default: m.PerfilPage })))
 const AdminPedidosPage = lazy(() => import('./pages/admin/AdminPedidosPage').then((m) => ({ default: m.AdminPedidosPage })))
 const AdminMensajeriaPage = lazy(() => import('./pages/admin/AdminMensajeriaPage').then((m) => ({ default: m.AdminMensajeriaPage })))
+const AdminStreamingPage = lazy(() => import('./pages/admin/AdminStreamingPage').then((m) => ({ default: m.AdminStreamingPage })))
 const NotificacionesPage = lazy(() => import('./pages/NotificacionesPage').then((m) => ({ default: m.NotificacionesPage })))
 const AdminProductosPage = lazy(() => import('./pages/admin/AdminProductosPage').then((m) => ({ default: m.AdminProductosPage })))
 
@@ -59,6 +60,7 @@ export default function App() {
         <Route index element={<AdminPedidosPage />} />
         <Route path="productos" element={<AdminProductosPage />} />
         <Route path="mensajeria" element={<AdminMensajeriaPage />} />
+        <Route path="streaming" element={<AdminStreamingPage />} />
         <Route path="token" element={<PerfilPage />} />
       </Route>
 

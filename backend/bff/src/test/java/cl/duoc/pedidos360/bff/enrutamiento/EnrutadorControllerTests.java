@@ -77,6 +77,8 @@ class EnrutadorControllerTests {
         registry.add("app.productos-url", () -> url);
         registry.add("app.pedidos-url", () -> url);
         registry.add("app.notificaciones-url", () -> url);
+        registry.add("app.analitica-url", () -> url);
+        registry.add("app.streaming-url", () -> url);
         registry.add("app.mensajeria-url", () -> "http://localhost:1"); // nadie escucha: simula una caída
     }
 
@@ -119,7 +121,19 @@ class EnrutadorControllerTests {
                 .with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
         mvc.perform(get("/api/mensajeria/queues").with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
         mvc.perform(get("/api/mensajes-fallidos").with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/streaming/topics").with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/analitica/metricas").with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
+        mvc.perform(get("/api/analitica/consumidores").with(jwt().authorities(CLIENTE))).andExpect(status().isForbidden());
         assertThat(ULTIMA.get()).isNull();
+    }
+
+    @Test
+    void reenviaLasRutasDeStreaming() throws Exception {
+        mvc.perform(get("/api/streaming/topics").with(jwt().authorities(ADMIN))).andExpect(status().isOk());
+        assertThat(ULTIMA.get()).startsWith("GET /api/streaming/topics");
+        // El seguimiento lo puede pedir un cliente: el microservicio filtra por dueño.
+        mvc.perform(get("/api/analitica/seguimiento").with(jwt().authorities(CLIENTE))).andExpect(status().isOk());
+        assertThat(ULTIMA.get()).startsWith("GET /api/analitica/seguimiento");
     }
 
     @Test

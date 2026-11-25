@@ -9,6 +9,7 @@ import { DatosTransferencia } from '../components/PaymentInfo'
 import { Paginacion, ThOrdenable } from '../components/tabla'
 import { useTabla } from '../components/useTabla'
 import { formatearTelefono } from '../utils/telefono'
+import { SeguimientoEnVivo } from '../components/SeguimientoEnVivo'
 import { TEXTO_SEGUIMIENTO, encuadre, imagenSeguimiento, unidades } from '../utils/seguimiento'
 import { irAWebpay } from '../utils/webpay'
 import { clp, fecha } from '../utils/format'
@@ -280,6 +281,8 @@ export function PedidosPage() {
           </div>
         </section>
       )}
+
+      {activo && <SeguimientoEnVivo pedidoId={activo.id} />}
 
       {historial.length > 0 && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

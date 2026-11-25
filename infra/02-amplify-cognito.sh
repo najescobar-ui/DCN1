@@ -42,7 +42,8 @@ RS_SCOPES=(ScopeName=productos.read,ScopeDescription="Leer catalogo"
            ScopeName=productos.write,ScopeDescription="Administrar catalogo"
            ScopeName=pedidos.read,ScopeDescription="Leer pedidos"
            ScopeName=pedidos.write,ScopeDescription="Crear y modificar pedidos"
-           ScopeName=mensajeria.admin,ScopeDescription="Administrar RabbitMQ")
+           ScopeName=mensajeria.admin,ScopeDescription="Administrar RabbitMQ"
+           ScopeName=streaming.admin,ScopeDescription="Administrar Kafka")
 # Si ya existe se actualiza con la lista completa (update-resource-server reemplaza los scopes).
 aws cognito-idp create-resource-server --user-pool-id "$USER_POOL_ID" --identifier pedidos360 --name "Pedidos360 API" \
   --scopes "${RS_SCOPES[@]}" >/dev/null 2>&1 || \
@@ -51,7 +52,7 @@ aws cognito-idp update-resource-server --user-pool-id "$USER_POOL_ID" --identifi
 
 # ACCESS_TOKEN_MINUTES (5-1440, default 60) shortens tokens to test the silent renewal.
 log "App client (public SPA, Authorization Code + PKCE)"
-SCOPES="openid email profile pedidos360/productos.read pedidos360/productos.write pedidos360/pedidos.read pedidos360/pedidos.write pedidos360/mensajeria.admin"
+SCOPES="openid email profile pedidos360/productos.read pedidos360/productos.write pedidos360/pedidos.read pedidos360/pedidos.write pedidos360/mensajeria.admin pedidos360/streaming.admin"
 PREVIEW_URL="https://preview.$AMPLIFY_APP_ID.amplifyapp.com"
 # Full client settings: update-user-pool-client resets any field that is not passed.
 CLIENT_SETTINGS=(
