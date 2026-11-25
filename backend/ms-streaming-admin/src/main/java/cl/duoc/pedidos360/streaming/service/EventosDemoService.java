@@ -37,7 +37,7 @@ public class EventosDemoService {
     private static final String[][] PRODUCTOS = { { "1", "Hamburguesa Classic Smash", "7990" },
             { "2", "Pizza Napolitana", "11990" }, { "3", "Sushi Platter", "14990" }, { "4", "Gyozas", "5490" },
             { "5", "Brownie", "3490" }, { "6", "Bebida lata", "1500" } };
-    private static final String[] PAGOS = { "EFECTIVO", "TARJETA", "WEBPAY" };
+    private static final String[] PAGOS = { "EFECTIVO", "TARJETA", "TRANSFERENCIA" };
 
     private final KafkaTemplate<String, String> template;
     private final StreamingAdminProperties props;

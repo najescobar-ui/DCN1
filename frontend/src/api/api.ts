@@ -5,7 +5,21 @@ import type {
   ClusterInfo,
   ColaInfo,
   Comprobante,
+  ConsumidorInfo,
   CrearColaRequest,
+  CrearTopicoRequest,
+  DestinoOffsets,
+  EscenarioDemo,
+  EventoPublicado,
+  GrupoDetalle,
+  GrupoResumen,
+  KafkaCluster,
+  ModificarTopicoRequest,
+  ResetResultado,
+  SeguimientoPedido,
+  TableroVentas,
+  TopicoDetalle,
+  TopicoResumen,
   CrearPedidoRequest,
   EstadoPago,
   EstadoPedido,
@@ -76,5 +90,38 @@ export const api = {
     eliminarBinding: (body: BindingRequest) => http.delete<void>('/mensajeria/bindings', { data: body }),
     publicar: (body: PublicarMensajeRequest) =>
       http.post<{ messageId: string }>('/mensajeria/messages', body).then((r) => r.data),
+  },
+
+  // Lo que producen los consumidores Kafka (ms-analitica): el tablero solo ADMIN, el seguimiento el dueño.
+  analitica: {
+    metricas: () => http.get<TableroVentas>('/analitica/metricas').then((r) => r.data),
+    seguimiento: () => http.get<SeguimientoPedido[]>('/analitica/seguimiento').then((r) => r.data),
+    seguimientoDe: (pedidoId: number) =>
+      http.get<SeguimientoPedido>(`/analitica/seguimiento/${pedidoId}`).then((r) => r.data),
+    consumidores: () => http.get<ConsumidorInfo[]>('/analitica/consumidores').then((r) => r.data),
+    cambiarConsumidores: (id: string, consumidores: number) =>
+      http.put<ConsumidorInfo>(`/analitica/consumidores/${encodeURIComponent(id)}`, { consumidores }).then((r) => r.data),
+  },
+
+  // Administración de Kafka (ms-streaming-admin). Requiere scope streaming.admin y rol ADMIN.
+  kafka: {
+    cluster: () => http.get<KafkaCluster>('/streaming/cluster').then((r) => r.data),
+    topicos: () => http.get<TopicoResumen[]>('/streaming/topics').then((r) => r.data),
+    topico: (nombre: string) =>
+      http.get<TopicoDetalle>(`/streaming/topics/${encodeURIComponent(nombre)}`).then((r) => r.data),
+    crearTopico: (body: CrearTopicoRequest) => http.post<TopicoDetalle>('/streaming/topics', body).then((r) => r.data),
+    modificarTopico: (nombre: string, body: ModificarTopicoRequest) =>
+      http.patch<TopicoDetalle>(`/streaming/topics/${encodeURIComponent(nombre)}`, body).then((r) => r.data),
+    aumentarParticiones: (nombre: string, total: number) =>
+      http.post<TopicoDetalle>(`/streaming/topics/${encodeURIComponent(nombre)}/partitions`, { total }).then((r) => r.data),
+    eliminarTopico: (nombre: string) => http.delete<void>(`/streaming/topics/${encodeURIComponent(nombre)}`),
+    grupos: () => http.get<GrupoResumen[]>('/streaming/groups').then((r) => r.data),
+    grupo: (id: string) => http.get<GrupoDetalle>(`/streaming/groups/${encodeURIComponent(id)}`).then((r) => r.data),
+    resetOffsets: (id: string, topico: string, destino: DestinoOffsets, desde?: string) =>
+      http
+        .post<ResetResultado>(`/streaming/groups/${encodeURIComponent(id)}/offsets`, { topico, destino, desde })
+        .then((r) => r.data),
+    publicar: (escenario: EscenarioDemo, cantidad?: number) =>
+      http.post<EventoPublicado[]>('/streaming/events', { escenario, cantidad }).then((r) => r.data),
   },
 }

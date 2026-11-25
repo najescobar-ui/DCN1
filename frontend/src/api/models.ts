@@ -211,3 +211,188 @@ export interface MensajeFallido {
   recibidoEn: string
   reprocesadoEn?: string | null
 }
+
+// ---------- Streaming (Kafka): ms-streaming-admin y ms-analitica ----------
+
+export interface KafkaBroker {
+  id: number
+  host: string
+  puerto: number
+  rack: string | null
+  controlador: boolean
+}
+
+export interface KafkaCluster {
+  clusterId: string
+  controlador: number | null
+  brokers: KafkaBroker[]
+  topicos: number
+  grupos: number
+}
+
+export type CleanupPolicy = 'DELETE' | 'COMPACT' | 'COMPACT_DELETE'
+
+export interface TopicoResumen {
+  nombre: string
+  interno: boolean
+  protegido: boolean
+  particiones: number
+  replicacion: number
+  isrCompleto: boolean
+  mensajes: number
+  cleanupPolicy: string | null
+  retencionMs: string | null
+}
+
+export interface ParticionInfo {
+  particion: number
+  lider: number
+  replicas: number[]
+  isr: number[]
+  offsetInicio: number
+  offsetFin: number
+  mensajes: number
+}
+
+export interface TopicoDetalle {
+  nombre: string
+  interno: boolean
+  protegido: boolean
+  replicacion: number
+  particiones: ParticionInfo[]
+  configuracion: Record<string, string>
+}
+
+export interface CrearTopicoRequest {
+  nombre: string
+  particiones: number
+  replicacion: number
+  minInsync?: number | null
+  retencionMs?: number | null
+  retencionBytes?: number | null
+  cleanupPolicy?: CleanupPolicy | null
+}
+
+export interface ModificarTopicoRequest {
+  retencionMs?: number | null
+  retencionBytes?: number | null
+  cleanupPolicy?: CleanupPolicy | null
+  minInsync?: number | null
+}
+
+export interface GrupoResumen {
+  id: string
+  estado: string
+  miembros: number
+  coordinador: number | null
+  topicos: string[]
+  lagTotal: number
+}
+
+export interface LagInfo {
+  topico: string
+  particion: number
+  confirmado: number
+  fin: number
+  lag: number
+  miembro: string
+}
+
+export interface GrupoDetalle {
+  id: string
+  estado: string
+  asignador: string
+  coordinador: number | null
+  miembros: { clientId: string; consumerId: string; host: string; particiones: string[] }[]
+  particiones: LagInfo[]
+  lagTotal: number
+}
+
+export type DestinoOffsets = 'INICIO' | 'FIN' | 'FECHA'
+
+export interface ResetResultado {
+  grupo: string
+  topico: string
+  destino: string
+  particiones: { particion: number; antes: number; despues: number }[]
+}
+
+export type EscenarioDemo = 'VALIDO' | 'INVALIDO' | 'INCOMPLETO' | 'FALLO_TRANSITORIO' | 'LOTE'
+
+export interface EventoPublicado {
+  key: string
+  particion: number
+  offset: number
+  descripcion: string
+}
+
+export interface ConsumidorInfo {
+  id: string
+  grupo: string
+  topicos: string[]
+  activo: boolean
+  consumidores: number
+  maximo: number
+  asignaciones: Record<string, string[]>
+}
+
+export interface ProductoVendido {
+  productoId: number
+  nombre: string
+  unidades: number
+  monto: number
+}
+
+export interface MetricaVentas {
+  ventana: string
+  inicio: string
+  fin: string
+  pedidosCreados: number
+  pedidosPagados: number
+  pedidosCancelados: number
+  montoPagado: number
+  ticketPromedio: number
+  unidadesVendidas: number
+  topProductos: ProductoVendido[]
+  porMetodoPago: Record<string, number>
+  eventosProcesados: number
+  generadoEn: string
+}
+
+export interface TableroVentas {
+  resumen: {
+    pedidosCreados: number
+    pedidosPagados: number
+    pedidosCancelados: number
+    unidadesVendidas: number
+    montoPagado: number
+    ticketPromedio: number
+    topProductos: ProductoVendido[]
+    porMetodoPago: Record<string, number>
+    ventanas: MetricaVentas[]
+    actualizadoEn: string | null
+  }
+  eventosContados: number
+  pedidosEnSeguimiento: number
+}
+
+export interface HitoSeguimiento {
+  tipo: 'PEDIDO_CREADO' | 'ESTADO_CAMBIADO' | 'PAGO_APROBADO' | 'PAGO_RECHAZADO'
+  estado: string
+  estadoPago: string
+  ocurridoEn: string
+  procesadoEn: string
+  particion: number
+  offset: number
+}
+
+export interface SeguimientoPedido {
+  pedidoId: number
+  clienteId: string
+  clienteUsername: string
+  estado: string
+  estadoPago: string
+  total: number | null
+  particion: number
+  hitos: HitoSeguimiento[]
+}
