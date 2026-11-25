@@ -2210,7 +2210,7 @@ h3 {
 
 .timeline li {
   display: grid;
-  grid-template-columns: 64px 1fr auto;
+  grid-template-columns: 72px 1fr auto;
   gap: 8px;
   align-items: baseline;
   padding-left: 12px;

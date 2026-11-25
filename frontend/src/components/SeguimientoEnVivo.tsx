@@ -51,7 +51,7 @@ export function SeguimientoEnVivo({ pedidoId }: { pedidoId: number }) {
       <ol className="timeline">
         {[...seguimiento.hitos].reverse().map((h) => (
           <li key={`${h.particion}-${h.offset}`}>
-            <span className="m faint">{new Date(h.ocurridoEn).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <span className="m faint">{new Date(h.ocurridoEn).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
             <span>{TEXTO[h.tipo](h)}</span>
             <span className="m faint" style={{ fontSize: 11 }}>
               offset {h.offset}
