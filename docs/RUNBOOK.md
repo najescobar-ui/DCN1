@@ -99,7 +99,7 @@ Enciende RDS y las dos EC2 (backend y mensajería) si están apagadas y espera a
 infra/smoke-test.sh
 ```
 
-Debe terminar con **`Resultado: 40 OK, 0 con diferencias`** (29 de la API y 11 de mensajería). Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
+Debe terminar con **`Resultado: 55 OK, 0 con diferencias`** (29 de la API, 11 de mensajería y 15 de streaming). Obtiene tokens reales con el flujo PKCE y prueba cada ruta con y sin token. También cierra cualquier pedido en curso de `cliente1` que haya quedado de antes.
 
 ### 4.3 Si cambiaste de red (casa, Duoc, celular)
 
@@ -138,7 +138,32 @@ docker exec pedidos360-mq-rabbit1-1 rabbitmqctl list_queues name arguments
 
 Demostración de la expiración con el administrador (o desde **Admin → Mensajería → Nueva cola** con TTL 5000 y DLQ): crear `demo.ttl` con `{"nombre":"demo.ttl","tipo":"QUORUM","conDlq":true,"ttlMs":5000}`, enlazarla a `pedidos.comandos` con la routing key `demo.ttl`, publicar un mensaje con esa routing key y esperar 5 segundos: pasa de `demo.ttl` a `demo.ttl.dlq`. Al terminar, eliminar el binding y las dos colas.
 
-### 4.5 Pruebas de carga
+### 4.5 Streaming (Kafka)
+
+Corre en la EC2 `pedidos360-streaming` (`KAFKA_IP` en `state.env`), dentro de `/opt/pedidos360-kafka`: `zookeeper1..3`, `kafka1..3`, `kafka-ui`, `ms-analitica` y `ms-streaming-admin`. Al encender la instancia todo arranca solo, en orden: los brokers esperan a los tres Zookeeper y los microservicios a los tres brokers (un par de minutos).
+
+```bash
+ssh -i ~/.ssh/pedidos360-dce1.pem ec2-user@<KAFKA_IP>   # KAFKA_IP está en infra/state.env
+cd /opt/pedidos360-kafka
+docker compose ps                                                        # los 9 contenedores
+docker exec pedidos360-kafka-kafka1-1 kafka-topics --bootstrap-server kafka1:29092 --describe --topic pedidos.actividad
+docker exec pedidos360-kafka-kafka1-1 kafka-consumer-groups --bootstrap-server kafka1:29092 --describe --group analitica-ventas
+docker compose logs -f ms-analitica | grep -E "\[analitica\]|\[seguimiento\]|Intento|DLT"   # consumidores, reintentos y DLT
+```
+
+Kafka UI: `http://<KAFKA_IP>:8090`, usuario `KAFKA_UI_USER` y clave `KAFKA_UI_PASSWORD` de `state.env`. Solo se abre desde la IP que corrió `12-kafka-ec2.sh`; si cambiaste de red vuelve a correrlo (no recrea nada, solo agrega las reglas).
+
+Demo completa de la guía (misma key, grupos independientes, lag, rebalance, caída de un broker, retención):
+
+```bash
+infra/demo-kafka.sh            # todos los pasos
+PAUSA=1 infra/demo-kafka.sh    # espera Enter entre pasos (para presentar)
+infra/demo-kafka.sh 5 7        # solo el consumidor detenido y la caída de un broker
+```
+
+El paso 7 detiene `kafka2` y lo vuelve a encender; termina cuando la réplica vuelve al ISR. Desde el sitio, **Admin → Streaming** tiene los mismos controles: eventos de prueba, consumidores de 0 a 3 por grupo y reset de offsets.
+
+### 4.6 Pruebas de carga
 
 `infra/carga-colas.sh` tiene tres modos. Ninguno toca los datos de los pedidos.
 
@@ -154,7 +179,7 @@ infra/carga-colas.sh dlq 20            # 20 mensajes inválidos a las DLQ reales
 
 Si una corrida se corta a la mitad, puede quedar la topología de prueba (`carga.*`). Se borra desde **Admin → Mensajería** o volviendo a correr el modo, que la recrea y la elimina al final.
 
-### 4.6 Colección de Postman
+### 4.7 Colección de Postman
 
 `tools/postman/Pedidos360-Mensajeria.postman_collection.json` (Postman → Import).
 
@@ -200,7 +225,15 @@ Si cambiaron los argumentos de las colas (TTL, largo máximo, DLX), RabbitMQ no 
 RECREAR_COLAS=1 infra/11-deploy-mensajeria.sh
 ```
 
-### 5.3 Frontend (Amplify)
+### 5.3 Streaming (EC2 de Kafka)
+
+```bash
+infra/13-deploy-streaming.sh
+```
+
+Compila `ms-analitica` y `ms-streaming-admin`, copia el compose, escribe `/opt/pedidos360-kafka/.env` (IP que anuncian los brokers y credenciales de Kafka UI, fuera de git) y ejecuta `docker compose up -d --build`. Termina mostrando los brokers registrados en Zookeeper (`[1, 2, 3]`) y el estado de los contenedores. Los tópicos los crea o corrige `ms-analitica` al arrancar, según `streaming.topicos` de su `application.yml`.
+
+### 5.4 Frontend (Amplify)
 
 ```bash
 BRANCH=main infra/06-deploy-frontend.sh       # producción: https://main.<AMPLIFY_APP_ID>.amplifyapp.com
@@ -209,7 +242,7 @@ BRANCH=preview infra/06-deploy-frontend.sh    # revisión:   https://preview.<AM
 
 Compila React con Vite, arma un zip y lo publica con la API de Amplify (despliegue manual, sin conexión a GitHub). Termina con `Job N: SUCCEED`.
 
-### 5.4 Probar en el preview o en local
+### 5.5 Probar en el preview o en local
 
 El CORS de producción solo acepta el sitio principal. Para probar en el preview o en `localhost:4200`, ábrelo mientras pruebas y ciérralo al terminar:
 
@@ -241,14 +274,16 @@ Tiempo total: unos 30 minutos, casi todo esperando a RDS.
 | 2 | `infra/02-amplify-cognito.sh` | App de Amplify, user pool, grupos, scopes, app client, dominio del Hosted UI y usuarios `admin` y `cliente1` | Muestra las URLs nuevas; las claves quedan en `state.env` |
 | 3 | `infra/03-ec2.sh` | EC2 con Java 21, llave SSH e IP elástica | Espera 2 minutos después, para que termine de instalar Java |
 | 4 | `infra/10-rabbitmq-ec2.sh` | EC2 de mensajería con Docker, su security group, IP elástica y credenciales de RabbitMQ | Va antes de 04 y 05: ellos usan `MQ_IP` y `MQ_PRIVATE_IP` |
-| 5 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integraciones y 36 rutas | Necesita las IPs de las dos EC2 y los datos de Cognito |
-| 6 | `infra/05-deploy-backend.sh` | Base `pedidos`, variables en la EC2 (incluida la conexión a RabbitMQ) y los tres servicios | Espera solo a que RDS esté disponible |
-| 7 | `infra/11-deploy-mensajeria.sh` | Base `mensajeria`, clúster RabbitMQ de dos nodos y los dos microservicios de mensajería | Unos 4 minutos la primera vez (descarga imágenes) |
-| 8 | `infra/07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores nuevos | Ver 6.3 |
-| 9 | `BRANCH=main infra/06-deploy-frontend.sh` | Publica el sitio | Crea la rama de Amplify si no existe |
-| 10 | `infra/08-cognito-ui.sh` | Logo y colores del Hosted UI | Opcional |
-| 11 | `infra/09-cognito-registro.sh` | Lambda que agrega a los usuarios registrados al grupo CLIENTE | |
-| 12 | `infra/smoke-test.sh` | Verificación completa | Debe dar 40 OK |
+| 5 | `infra/12-kafka-ec2.sh` | EC2 de streaming (t3.large) con Docker, su security group, IP elástica y credenciales de Kafka UI | Va antes de 05: usa `KAFKA_PRIVATE_IP` |
+| 6 | `infra/04-apigw.sh` | HTTP API, CORS, authorizer JWT, integración con el BFF y 52 rutas | Necesita la IP de la EC2 backend y los datos de Cognito |
+| 7 | `infra/05-deploy-backend.sh` | Base `pedidos`, variables en la EC2 (incluidas las conexiones a RabbitMQ y Kafka) y los tres servicios | Espera solo a que RDS esté disponible |
+| 8 | `infra/11-deploy-mensajeria.sh` | Base `mensajeria`, clúster RabbitMQ de dos nodos y los dos microservicios de mensajería | Unos 4 minutos la primera vez (descarga imágenes) |
+| 9 | `infra/13-deploy-streaming.sh` | Zookeeper ×3, Kafka ×3, Kafka UI, ms-analitica y ms-streaming-admin; los tópicos los crea ms-analitica | Unos 5 minutos la primera vez |
+| 10 | `infra/07-frontend-env.sh` | Escribe `frontend/.env.production` y `.env.development` con los valores nuevos | Ver 6.3 |
+| 11 | `BRANCH=main infra/06-deploy-frontend.sh` | Publica el sitio | Crea la rama de Amplify si no existe |
+| 12 | `infra/08-cognito-ui.sh` | Logo y colores del Hosted UI | Opcional |
+| 13 | `infra/09-cognito-registro.sh` | Lambda que agrega a los usuarios registrados al grupo CLIENTE | |
+| 14 | `infra/smoke-test.sh` | Verificación completa | Debe dar 55 OK |
 
 ### 6.3 Actualizar el repositorio con los valores nuevos
 
@@ -302,6 +337,12 @@ La mayoría de los valores salen de `state.env` o de la cuenta, así que en otro
 | En la consola de RabbitMQ aparece un exchange `direct` sin uso | Lo dejó una versión anterior de `carga-colas.sh perftest` | Borrarlo en Exchanges → direct → Delete |
 | ms-notificaciones no arranca: `PRECONDITION_FAILED - inequivalent arg` | Cambiaron los argumentos de una cola que ya existe | `RECREAR_COLAS=1 infra/11-deploy-mensajeria.sh` |
 | Un nodo no aparece en `cluster_status` | El contenedor se reinició y aún no vuelve a unirse | `docker compose restart rabbit2` y esperar 20 s |
+| `/api/streaming/*` o `/api/analitica/*` responden 502 | El BFF no alcanza la EC2 de streaming (apagada, o `ANALITICA_URL`/`STREAMING_URL` con una IP privada vieja) | `infra/encender.sh`; si se recreó la EC2, `infra/05-deploy-backend.sh` |
+| `/api/streaming/*` responde 403 siendo admin | El token no trae `pedidos360/streaming.admin` (sesión iniciada antes de agregar el scope) | Cerrar sesión y volver a entrar |
+| Kafka UI o el SSH a la EC2 de streaming no responden | Cambió tu IP pública | `infra/12-kafka-ec2.sh` (agrega las reglas para la IP actual) |
+| Un broker no aparece en `/brokers/ids` o hay particiones con ISR incompleto | El contenedor se reinició y aún se está sincronizando | Esperar 30 s; si no vuelve, `docker compose restart kafka2` (el que falte) |
+| ms-pedidos registra `Kafka no disponible` | EC2 de streaming apagada o brokers caídos | Los pedidos se crean igual; `infra/encender.sh` y revisar `docker compose ps` |
+| El tablero o el seguimiento quedan vacíos después de reiniciar ms-analitica | Se están reconstruyendo desde el log | Esperar a `Proyecciones reconstruidas desde el log` en `docker compose logs ms-analitica` |
 | RDS: `create-db-instance` falla por el nombre | Ya existe `pedidos360-db` de un intento anterior | Borrarla o cambiar `PROJECT` |
 
 Registros útiles:
@@ -323,15 +364,17 @@ Solo si ya no se va a usar: **no se puede deshacer** y se pierden los datos. Pri
 source ~/.aws/dce1-env.sh
 set -a; source infra/state.env; set +a
 aws apigatewayv2 delete-api --api-id "$API_ID"
-aws ec2 terminate-instances --instance-ids "$EC2_INSTANCE_ID"
-aws ec2 wait instance-terminated --instance-ids "$EC2_INSTANCE_ID"
-aws ec2 release-address --allocation-id "$EC2_EIP_ALLOC"                 # la IP elástica cobra aunque no se use
+aws ec2 terminate-instances --instance-ids "$EC2_INSTANCE_ID" "$MQ_INSTANCE_ID" "$KAFKA_INSTANCE_ID"
+aws ec2 wait instance-terminated --instance-ids "$EC2_INSTANCE_ID" "$MQ_INSTANCE_ID" "$KAFKA_INSTANCE_ID"
+for a in "$EC2_EIP_ALLOC" "$MQ_EIP_ALLOC" "$KAFKA_EIP_ALLOC"; do aws ec2 release-address --allocation-id "$a"; done   # las IP elásticas cobran aunque no se usen
 aws rds delete-db-instance --db-instance-identifier pedidos360-db --skip-final-snapshot
 aws lambda delete-function --function-name pedidos360-post-confirmation
 aws cognito-idp delete-user-pool-domain --user-pool-id "$USER_POOL_ID" --domain "$(echo "$COGNITO_DOMAIN" | sed -E 's#https://([^.]+)\..*#\1#')"
 aws cognito-idp delete-user-pool --user-pool-id "$USER_POOL_ID"
 aws amplify delete-app --app-id "$AMPLIFY_APP_ID"
 # Cuando RDS termine de borrarse:
+aws ec2 delete-security-group --group-id "$KAFKA_SG_ID"
+aws ec2 delete-security-group --group-id "$MQ_SG_ID"
 aws ec2 delete-security-group --group-id "$RDS_SG_ID"
 aws ec2 delete-security-group --group-id "$EC2_SG_ID"
 aws ec2 delete-key-pair --key-name pedidos360-key
