@@ -93,4 +93,31 @@ check 403 cliente   GET  /api/mensajes-fallidos "$MQ_CLIENTE"
 check 200 cliente   GET  /api/notificaciones "$CLIENTE"
 check 200 admin     GET  /api/auditoria "$ADMIN"
 
+log "Streaming (Kafka)"
+KF="openid email profile pedidos360/pedidos.read pedidos360/streaming.admin"
+KF_ADMIN=$(SCOPE="$KF" "$INFRA_DIR/get-token.sh" admin "$ADMIN_PASSWORD")
+KF_CLIENTE=$(SCOPE="$KF" "$INFRA_DIR/get-token.sh" cliente1 "$CLIENTE_PASSWORD")
+check 401 sin-token GET    /api/streaming/topics ""
+check 403 cliente   GET    /api/streaming/topics "$KF_CLIENTE"
+check 403 admin     GET    /api/streaming/topics "$ADMIN"
+check 200 admin     GET    /api/streaming/cluster "$KF_ADMIN"
+check 200 admin     GET    /api/streaming/topics/pedidos.actividad "$KF_ADMIN"
+check 200 admin     GET    /api/streaming/groups "$KF_ADMIN"
+check 400 admin     POST   /api/streaming/topics "$KF_ADMIN" '{"nombre":"x","particiones":0,"replicacion":5}'
+check 409 admin     DELETE /api/streaming/topics/pedidos.actividad "$KF_ADMIN"
+check 200 admin     GET    /api/analitica/metricas "$KF_ADMIN"
+check 403 cliente   GET    /api/analitica/metricas "$KF_CLIENTE"
+check 200 admin     GET    /api/analitica/consumidores "$KF_ADMIN"
+check 200 cliente   GET    /api/analitica/seguimiento "$KF_CLIENTE"
+# El clúster real: 3 brokers y cada partición de los dos tópicos con 3 réplicas, todas en el ISR.
+curl -s "$API_URL/api/streaming/cluster" -H "Authorization: Bearer $KF_ADMIN" > /tmp/pedidos360-body
+B=$(python3 -c 'import json;print(len(json.load(open("/tmp/pedidos360-body"))["brokers"]))')
+if [ "$B" = 3 ]; then PASS=$((PASS+1)); echo "OK 3 brokers en el clúster"; else FAIL=$((FAIL+1)); echo "XX brokers: $B"; fi
+for t in pedidos.actividad ventas.metricas; do
+  curl -s "$API_URL/api/streaming/topics/$t" -H "Authorization: Bearer $KF_ADMIN" > /tmp/pedidos360-body
+  R=$(python3 -c 'import json;d=json.load(open("/tmp/pedidos360-body"));p=d["particiones"];print(len(p), all(len(x["replicas"])==3 and len(x["isr"])==3 for x in p), d["configuracion"].get("min.insync.replicas"))')
+  if [ "$R" = "3 True 2" ]; then PASS=$((PASS+1)); echo "OK $t: 3 particiones, 3 réplicas en ISR, min.insync.replicas=2"
+  else FAIL=$((FAIL+1)); echo "XX $t: $R"; fi
+done
+
 echo; echo "Resultado: $PASS OK, $FAIL con diferencias"
