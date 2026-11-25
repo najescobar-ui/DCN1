@@ -1,0 +1,112 @@
+server:
+  port: ${PORT:8085}
+
+spring:
+  application:
+    name: ms-analitica
+  kafka:
+    # Los tres brokers: si uno no responde, el cliente obtiene la metadata del clúster desde otro.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # Si un tópico ya existe con otra configuración que la de KafkaTopicosConfig, se corrige al arrancar.
+      modify-topic-configs: true
+      # Sin Kafka el servicio arranca igual (la API responde y los consumidores reintentan la conexión).
+      fail-fast: false
+    consumer:
+      # Sin offset confirmado (grupo nuevo), el grupo parte desde el inicio del log retenido.
+      auto-offset-reset: earliest
+      # El contenedor confirma el offset después de procesar cada lote, nunca antes (ack-mode abajo).
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer envuelve al de JSON: un mensaje ilegible no bloquea la partición, sino que
+      # llega al error handler, que lo manda al tópico de errores (.DLT).
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+        spring.json.trusted.packages: cl.duoc.pedidos360.analitica.evento
+        # El productor no manda headers de tipo: cada listener declara la clase que espera.
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: cl.duoc.pedidos360.analitica.evento.ActividadPedido
+        # Reparto de particiones cooperativo: en un rebalance solo se mueven las particiones que cambian de dueño.
+        partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+    producer:
+      # Publica las métricas derivadas (ventas.metricas) y los eventos fallidos (.DLT).
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+    listener:
+      ack-mode: batch
+      # Los consumidores arrancan después de reconstruir las proyecciones desde el log (RehidratadorProyecciones).
+      auto-startup: false
+      missing-topics-fatal: false
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+# Nombres, grupos y políticas de los tópicos en un solo lugar (ver StreamingProperties).
+streaming:
+  topicos:
+    # Tópico 1: eventos de dominio de los pedidos. Key = pedidoId, así los eventos de un pedido van en orden.
+    actividad:
+      nombre: pedidos.actividad
+      particiones: 3
+      replicas: 3
+      min-insync: 2
+      cleanup-policy: delete
+      # 7 días: alcanza para reconstruir las proyecciones o reprocesar la semana completa.
+      retencion-ms: 604800000
+      # Tope por partición (100 MiB): si llega antes que el tiempo, se borran los segmentos más antiguos.
+      retencion-bytes: 104857600
+      # Segmentos de un día: la retención solo puede borrar segmentos cerrados.
+      segmento-ms: 86400000
+    # Tópico 2: métricas derivadas por ventana de un minuto. Key = id de la ventana.
+    metricas:
+      nombre: ventas.metricas
+      particiones: 3
+      replicas: 3
+      min-insync: 2
+      # compact: de cada ventana se conserva la última versión; delete: y nada más antiguo que 24 horas.
+      cleanup-policy: compact,delete
+      retencion-ms: 86400000
+      retencion-bytes: 52428800
+      segmento-ms: 3600000
+    # Tópico de errores: eventos que no se pudieron procesar (ilegibles, inválidos o con reintentos agotados).
+    errores:
+      nombre: pedidos.actividad.DLT
+      particiones: 3
+      replicas: 3
+      min-insync: 2
+      cleanup-policy: delete
+      retencion-ms: 1209600000
+      retencion-bytes: 52428800
+      segmento-ms: 86400000
+  grupos:
+    # Caso de uso 1: analítica de ventas en vivo; publica las métricas en el tópico 2.
+    analitica: analitica-ventas
+    # Caso de uso 2: seguimiento de cada pedido (línea de tiempo que ve el cliente).
+    seguimiento: seguimiento-pedidos
+    # Caso de uso 3: tablero del administrador, alimentado por el tópico 2.
+    tablero: tablero-ventas
+  # Un consumidor por partición (3 particiones = 3 consumidores por grupo).
+  concurrencia: 3
+  # Ventana de agregación de las métricas.
+  ventana: 1m
+  # Ventanas que guarda el tablero en memoria (una hora).
+  ventanas-en-tablero: 60
+  reintentos:
+    # Errores transitorios: 3 intentos en total, con 1 segundo entre cada uno; luego, al tópico de errores.
+    intentos: 3
+    espera: 1s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
