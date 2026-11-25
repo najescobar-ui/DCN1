@@ -1,0 +1,50 @@
+server:
+  port: ${PORT:8086}
+
+spring:
+  application:
+    name: ms-streaming-admin
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    admin:
+      # Sin Kafka el servicio arranca igual; las operaciones responden 503 hasta que el clúster vuelva.
+      fail-fast: false
+      auto-create: false
+    producer:
+      # Solo publica eventos de prueba para la demo (POST /api/streaming/events), como texto JSON.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+
+app:
+  security:
+    cognito:
+      issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_CHANGEME}
+      client-ids: ${COGNITO_CLIENT_ID:CHANGEME}
+      default-role: CLIENTE
+
+streaming:
+  admin:
+    # Tiempo máximo de cada operación contra el clúster.
+    timeout: 10s
+    # Tópicos y grupos de los que depende el sistema: se pueden ver y ajustar, pero no eliminar ni resetear
+    # desde la API (los grupos sí se pueden resetear si están detenidos).
+    topicos-protegidos:
+      - pedidos.actividad
+      - ventas.metricas
+      - pedidos.actividad.DLT
+    # Prefijo de los tópicos internos de Kafka (__consumer_offsets, __transaction_state): solo lectura.
+    prefijo-interno: __
+    # Tópico al que publica la demo de eventos y header que simula un fallo transitorio en ms-analitica.
+    topico-demo: pedidos.actividad
+    header-simular-fallo: x-simular-fallo
+    # Máximo de eventos por lote de la demo.
+    max-lote: 500
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
