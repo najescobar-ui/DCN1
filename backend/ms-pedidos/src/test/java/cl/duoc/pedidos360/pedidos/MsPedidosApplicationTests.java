@@ -1,5 +1,6 @@
 package cl.duoc.pedidos360.pedidos;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -11,6 +12,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 
+import java.time.Duration;
+import java.util.Map;
+
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.test.EmbeddedKafkaBroker;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,8 +38,9 @@ import cl.duoc.pedidos360.pedidos.client.ProductosClient;
 import cl.duoc.pedidos360.pedidos.exception.ProductoNoDisponibleException;
 import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}")
 @AutoConfigureMockMvc
+@EmbeddedKafka(partitions = 3, topics = "pedidos.actividad")
 class MsPedidosApplicationTests {
 
     private static final SimpleGrantedAuthority READ = new SimpleGrantedAuthority("SCOPE_pedidos360/pedidos.read");
@@ -52,6 +64,34 @@ class MsPedidosApplicationTests {
     void setUp() {
         repository.deleteAll();
         given(productosClient.obtener(1L)).willReturn(new ProductoDto(1L, "Pizza", new BigDecimal("12990"), 10));
+    }
+
+    @Autowired
+    private EmbeddedKafkaBroker broker;
+
+    /** Al crear un pedido se publica PEDIDO_CREADO en Kafka, con el id del pedido como key y sus líneas. */
+    @Test
+    void crearPedidoPublicaElEventoEnKafkaConElPedidoComoKey() throws Exception {
+        Map<String, Object> props = KafkaTestUtils.consumerProps(broker, "prueba-productor", false);
+        try (Consumer<String, String> consumer = new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(),
+                new StringDeserializer()).createConsumer()) {
+            broker.consumeFromAnEmbeddedTopic(consumer, "pedidos.actividad");
+            mvc.perform(post("/api/pedidos").contentType(MediaType.APPLICATION_JSON).content(PEDIDO).with(cliente("kafka")))
+                    .andExpect(status().isCreated());
+            String id = repository.findAll().getFirst().getId().toString();
+            // Otras pruebas también crean pedidos: se busca el evento de este.
+            ConsumerRecord<String, String> r = null;
+            for (int i = 0; i < 10 && r == null; i++) {
+                for (ConsumerRecord<String, String> x : KafkaTestUtils.getRecords(consumer, Duration.ofSeconds(2))) {
+                    if (id.equals(x.key())) {
+                        r = x;
+                    }
+                }
+            }
+            assertThat(r).as("evento del pedido " + id).isNotNull();
+            assertThat(r.value()).contains("\"tipo\":\"PEDIDO_CREADO\"").contains("\"nombre\":\"Pizza\"")
+                    .contains("\"clienteId\":\"kafka\"");
+        }
     }
 
     @Test

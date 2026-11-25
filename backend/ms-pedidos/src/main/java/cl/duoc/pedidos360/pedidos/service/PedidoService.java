@@ -12,6 +12,7 @@ import cl.duoc.pedidos360.pedidos.client.ProductosClient;
 import cl.duoc.pedidos360.pedidos.dto.CrearPedidoRequest;
 import cl.duoc.pedidos360.pedidos.dto.ItemRequest;
 import cl.duoc.pedidos360.pedidos.dto.PedidoResponse;
+import cl.duoc.pedidos360.pedidos.evento.ActividadPedido;
 import cl.duoc.pedidos360.pedidos.evento.EventoPedido;
 import cl.duoc.pedidos360.pedidos.evento.TipoEvento;
 import cl.duoc.pedidos360.pedidos.exception.OperacionNoPermitidaException;
@@ -131,11 +132,12 @@ public class PedidoService {
     }
 
     /**
-     * Anuncia un hecho de negocio. El servicio no sabe de RabbitMQ: emite un evento de Spring y la capa de
-     * mensajería lo publica cuando la transacción hace commit.
+     * Anuncia un hecho de negocio. El servicio no sabe de RabbitMQ ni de Kafka: emite eventos de Spring y la capa
+     * de mensajería los publica cuando la transacción hace commit (EventoPedido a RabbitMQ, ActividadPedido a Kafka).
      */
     public void publicar(TipoEvento tipo, Pedido pedido) {
         eventos.publishEvent(EventoPedido.de(tipo, pedido));
+        eventos.publishEvent(ActividadPedido.de(tipo, pedido));
     }
 
     /** Publica el resultado del pago solo cuando el estado de pago realmente cambia. */

@@ -31,6 +31,9 @@ WEBPAY_RETURN_URL=$API_URL/api/pagos/webpay/retorno
 RABBIT_ADDRESSES=${MQ_PRIVATE_IP:-localhost}:5672,${MQ_PRIVATE_IP:-localhost}:5673
 MQ_USER=${MQ_USER:-guest}
 MQ_PASSWORD=${MQ_PASSWORD:-guest}
+KAFKA_BOOTSTRAP_SERVERS=${KAFKA_PRIVATE_IP:-localhost}:9092,${KAFKA_PRIVATE_IP:-localhost}:9093,${KAFKA_PRIVATE_IP:-localhost}:9094
+ANALITICA_URL=http://${KAFKA_PRIVATE_IP:-localhost}:8085
+STREAMING_URL=http://${KAFKA_PRIVATE_IP:-localhost}:8086
 ENV
 
 log "Build + deploy"
