@@ -29,7 +29,7 @@ import cl.duoc.pedidos360.pedidos.client.ProductosClient;
 import cl.duoc.pedidos360.pedidos.model.EstadoPago;
 import cl.duoc.pedidos360.pedidos.repository.PedidoRepository;
 
-@SpringBootTest(properties = "app.pagos.frontend-origins=https://front.test,http://localhost:4200")
+@SpringBootTest(properties = { "app.pagos.frontend-origins=https://front.test,http://localhost:4200", "streaming.habilitado=false" })
 @AutoConfigureMockMvc
 class PagoWebpayTests {
 

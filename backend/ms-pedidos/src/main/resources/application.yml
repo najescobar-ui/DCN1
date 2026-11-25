@@ -22,6 +22,24 @@ spring:
     # El broker confirma cada publicación y devuelve los mensajes que no llegan a ninguna cola.
     publisher-confirm-type: correlated
     publisher-returns: true
+  # Clúster Kafka (tres brokers). En AWS: KAFKA_BOOTSTRAP_SERVERS=<ip privada>:9092,<ip privada>:9093,<ip privada>:9094
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      # La escritura se confirma cuando la tienen todas las réplicas en sincronía (al menos 2, por min.insync.replicas).
+      acks: all
+      properties:
+        # Sin duplicados ni desorden por reintentos del productor dentro de una partición.
+        enable.idempotence: true
+        # El consumidor declara la clase que espera; no se mandan headers de tipo de Java.
+        spring.json.add.type.headers: false
+        # Si los brokers no responden, el envío se rinde rápido en vez de colgar la petición del cliente.
+        max.block.ms: 3000
+        delivery.timeout.ms: 30000
+        request.timeout.ms: 10000
+        linger.ms: 5
 
 app:
   security:
@@ -43,6 +61,12 @@ app:
       commerce-code: ${WEBPAY_COMMERCE_CODE:597055555532}
       api-key: ${WEBPAY_API_KEY:579B532A7440BB0C9079DED94D31EA1615BACEB56610332264630D42D0A36B1C}
       return-url: ${WEBPAY_RETURN_URL:http://localhost:8082/api/pagos/webpay/retorno}
+
+# Streaming (ver StreamingProperties y PublicadorEventosKafka). La definición del tópico (particiones, réplicas,
+# retención) la declara ms-analitica, que es quien lo consume.
+streaming:
+  habilitado: ${KAFKA_HABILITADO:true}
+  topico: pedidos.actividad
 
 # Nombres de mensajería en un solo lugar (ver MensajeriaProperties).
 mensajeria:
