@@ -110,6 +110,26 @@ route "POST /api/mensajeria/messages"                   "$MQ_SCOPE"
 # Mensajes no entregados que registraron los listeners de las DLQ (ms-notificaciones; exige ADMIN).
 route "GET /api/mensajes-fallidos"                      "$MQ_SCOPE"
 route "POST /api/mensajes-fallidos/{id}/reprocesar"     "$MQ_SCOPE"
+# Streaming: lo que producen los consumidores de Kafka (ms-analitica). El tablero exige ADMIN en el BFF y en el
+# microservicio; el seguimiento lo ve el dueño del pedido.
+route "GET /api/analitica/seguimiento"            "pedidos360/pedidos.read"
+route "GET /api/analitica/seguimiento/{pedidoId}" "pedidos360/pedidos.read"
+route "GET /api/analitica/metricas"               "pedidos360/pedidos.read"
+# Administración de Kafka (ms-streaming-admin) y de los consumidores (ms-analitica): scope streaming.admin + ADMIN.
+KAFKA_SCOPE="pedidos360/streaming.admin"
+route "GET /api/analitica/consumidores"           "$KAFKA_SCOPE"
+route "PUT /api/analitica/consumidores/{id}"      "$KAFKA_SCOPE"
+route "GET /api/streaming/cluster"                "$KAFKA_SCOPE"
+route "GET /api/streaming/topics"                 "$KAFKA_SCOPE"
+route "POST /api/streaming/topics"                "$KAFKA_SCOPE"
+route "GET /api/streaming/topics/{nombre}"        "$KAFKA_SCOPE"
+route "PATCH /api/streaming/topics/{nombre}"      "$KAFKA_SCOPE"
+route "DELETE /api/streaming/topics/{nombre}"     "$KAFKA_SCOPE"
+route "POST /api/streaming/topics/{nombre}/partitions" "$KAFKA_SCOPE"
+route "GET /api/streaming/groups"                 "$KAFKA_SCOPE"
+route "GET /api/streaming/groups/{id}"            "$KAFKA_SCOPE"
+route "POST /api/streaming/groups/{id}/offsets"   "$KAFKA_SCOPE"
+route "POST /api/streaming/events"                "$KAFKA_SCOPE"
 # Webpay sends the customer's browser back here (GET or form POST) without a bearer token;
 # ms-pedidos validates the transaction token directly with Transbank.
 route "GET /api/pagos/webpay/retorno"     PUBLIC

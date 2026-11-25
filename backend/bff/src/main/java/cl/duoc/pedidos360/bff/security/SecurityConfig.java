@@ -33,6 +33,8 @@ public class SecurityConfig {
                         // Autorización por rol: la administración es solo para ADMIN.
                         .requestMatchers("/api/mensajeria/**", "/api/mensajes-fallidos/**", "/api/auditoria")
                                 .hasRole("ADMIN")
+                        .requestMatchers("/api/streaming/**", "/api/analitica/consumidores/**", "/api/analitica/metricas")
+                                .hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/productos/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/productos/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/productos/**").hasRole("ADMIN")
